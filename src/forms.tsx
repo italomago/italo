@@ -25,6 +25,7 @@ import { annualToMonthly, monthlyToAnnual, monthsToGoal, summarizeFinancing } fr
 import { invoiceDueDate, invoiceFor } from './lib/generate'
 import { parseQuick } from './lib/parser'
 import { parseBulk } from './lib/bulk'
+import { parseImport, sameName, type ImportPayload } from './lib/importer'
 import { navigate } from './router'
 import type {
   Account,
@@ -1193,6 +1194,68 @@ function BulkRecurrenceForm() {
   )
 }
 
+/** Importa cadastros preparados (ex.: financiamentos lidos dos contratos). Não apaga nada. */
+function ImportForm() {
+  const data = useData()
+  const [text, setText] = useState('')
+  let payload: ImportPayload | null = null
+  let error = ''
+  if (text.trim()) {
+    try {
+      payload = parseImport(text)
+    } catch (e) {
+      error = (e as Error).message
+    }
+  }
+  const toRemove = payload ? data.recurrences.filter((r) => payload!.removeRecurrences.some((n) => sameName(n, r.description))) : []
+  const save = () => {
+    if (!payload) return
+    const r = actions.importMerge(payload)
+    toast(
+      [r.added && `${r.added} financiamento(s) cadastrado(s)`, r.updated && `${r.updated} atualizado(s)`, r.removed && `${r.removed} despesa(s) fixa(s) removida(s)`]
+        .filter(Boolean)
+        .join(' · ') || 'Nada a importar',
+    )
+    closeForm()
+    navigate('financiamentos')
+  }
+  return (
+    <Sheet title="Importar cadastro" onClose={closeForm} footer={<Footer onSave={save} disabled={!payload} label="Importar" />}>
+      <div className="note">
+        Cole aqui o texto de cadastro que você recebeu. Os itens são <b>adicionados</b> aos seus dados; nada é apagado (um financiamento com o mesmo nome é atualizado).
+      </div>
+      <Field label="Texto do cadastro">
+        <textarea id="import-text" rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder='{"app":"minhas-financas-importar", ...}' />
+      </Field>
+      {error && <div className="note neg">{error}</div>}
+      {payload && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <h3>Será importado</h3>
+          {payload.financings.map((f) => {
+            const s = summarizeFinancing(f)
+            const exists = data.financings.some((x) => sameName(x.name, f.name))
+            return (
+              <div key={f.name} className="kv">
+                <span>
+                  🏦 {f.name} {exists && <span className="badge info">atualizar</span>}
+                </span>
+                <span>
+                  {s.paidCount}/{s.resolved.n} pagas · próx. {fmtBRL(s.nextInstallment?.payment ?? 0)}
+                </span>
+              </div>
+            )
+          })}
+          {toRemove.length > 0 && (
+            <div className="small muted" style={{ marginTop: 8 }}>
+              Despesas fixas removidas para não contar duas vezes: <b>{toRemove.map((r) => r.description).join(', ')}</b>
+            </div>
+          )}
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Cartão e conta
 // ---------------------------------------------------------------------------
@@ -1319,6 +1382,8 @@ export function FormHost() {
       return <AccountForm key={key} id={spec.id} />
     case 'lote':
       return <BulkRecurrenceForm key={key} />
+    case 'importar':
+      return <ImportForm key={key} />
   }
 }
 

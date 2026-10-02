@@ -1,7 +1,7 @@
 // Ajustes: segurança (PIN/biometria), backup e restauração, alertas, categorias e tema.
 import { useEffect, useRef, useState } from 'react'
 import { actions, getData, useData } from '../store'
-import { askConfirm, askText, Field, NumberField, Section, Seg, TopBar, Toggle, toast } from '../components/ui'
+import { askConfirm, askText, Field, openForm, NumberField, Section, Seg, TopBar, Toggle, toast } from '../components/ui'
 import { biometricAvailable, checkPin, hashPin, makeBackup, readBackup, registerBiometric, verifyBiometric, type BackupFile } from '../lib/security'
 import { shareFile, transactionsCSV, downloadFile } from '../lib/export'
 import { uid } from '../lib/defaults'
@@ -167,6 +167,9 @@ export function Settings() {
         </button>
         <button className="btn secondary" onClick={restoreText}>
           📋 Restaurar colando o texto
+        </button>
+        <button className="btn secondary" onClick={() => openForm({ type: 'importar' })}>
+          📥 Importar cadastro (adiciona, não apaga)
         </button>
         <input
           ref={fileRef}

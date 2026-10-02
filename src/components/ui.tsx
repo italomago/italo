@@ -51,6 +51,7 @@ export type FormType =
   | 'cartao'
   | 'conta'
   | 'lote'
+  | 'importar'
   | 'tipo'
   | 'tx'
 export interface FormSpec {

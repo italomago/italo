@@ -30,9 +30,14 @@ export function Financings() {
       <TopBar
         title="Financiamentos"
         right={
-          <button className="icon-btn" onClick={() => openForm({ type: 'financiamento' })} aria-label="Novo financiamento">
-            ＋
-          </button>
+          <>
+            <button className="icon-btn" onClick={() => openForm({ type: 'importar' })} aria-label="Importar cadastro">
+              📥
+            </button>
+            <button className="icon-btn" onClick={() => openForm({ type: 'financiamento' })} aria-label="Novo financiamento">
+              ＋
+            </button>
+          </>
         }
       />
       {list.length > 0 && (

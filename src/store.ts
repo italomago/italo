@@ -13,6 +13,7 @@ import {
   removeSource,
 } from './lib/generate'
 import { today } from './lib/dates'
+import { sameName, type ImportPayload } from './lib/importer'
 import type {
   Account,
   AppData,
@@ -203,6 +204,41 @@ export const actions = {
         transactions: mergeSource(d.transactions, 'financing', f.id, financingDrafts(f), { respectDraftPaid: respect }),
       }
     })
+  },
+  /** Adiciona cadastros colados (financiamentos) sem apagar o restante. Financiamento com o mesmo nome é atualizado. */
+  importMerge(payload: ImportPayload) {
+    let added = 0
+    let updated = 0
+    let removed = 0
+    update((d) => {
+      let next = d
+      const fallback = d.accounts.find((a) => !a.archived)?.id
+      for (const f of payload.financings) {
+        const prev = next.financings.find((x) => sameName(x.name, f.name))
+        const fin: Financing = { ...f, id: prev?.id ?? uid(), accountId: prev?.accountId ?? fallback }
+        if (prev) updated++
+        else added++
+        next = {
+          ...next,
+          financings: upsert(next.financings, fin),
+          transactions: mergeSource(next.transactions, 'financing', fin.id, financingDrafts(fin), { respectDraftPaid: true }),
+        }
+      }
+      for (const name of payload.removeRecurrences) {
+        for (const r of next.recurrences.filter((x) => sameName(x.description, name))) {
+          removed++
+          next = {
+            ...next,
+            recurrences: next.recurrences.filter((x) => x.id !== r.id),
+            transactions: next.transactions
+              .filter((t) => !(t.source.type === 'recurring' && t.source.id === r.id && !t.paid))
+              .map((t) => (t.source.type === 'recurring' && t.source.id === r.id ? { ...t, source: { type: 'manual' as const } } : t)),
+          }
+        }
+      }
+      return next
+    })
+    return { added, updated, removed }
   },
   deleteFinancing(id: string) {
     update((d) => ({ ...d, financings: d.financings.filter((x) => x.id !== id), transactions: removeSource(d.transactions, 'financing', id) }))
