@@ -132,6 +132,7 @@ export interface Financing {
   paidCount: number
   balanceInformed?: number
   monthlyFees?: number // seguros e taxas por mês
+  indexMonthly?: number // correção estimada do saldo ao mês (IPCA/TR), decimal
   system: AmortSystem
   accountId?: string
   note?: string

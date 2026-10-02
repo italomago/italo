@@ -13,6 +13,7 @@ import type { PurchaseStatus } from '../lib/types'
 const MENU: { path: string; icon: string; label: string }[] = [
   { path: 'situacao', icon: '🧠', label: 'Minha situação' },
   { path: 'planejamento', icon: '🗓️', label: 'Próximos meses' },
+  { path: 'amortizar', icon: '⚖️', label: 'Onde amortizar' },
   { path: 'compromissos', icon: '📄', label: 'Dívidas e compromissos' },
   { path: 'compras', icon: '🛍️', label: 'Compras' },
   { path: 'recorrentes', icon: '🔄', label: 'Contas recorrentes' },

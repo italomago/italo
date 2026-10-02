@@ -9,6 +9,7 @@ import { FinancingDetail, Financings } from './screens/Financings'
 import { GoalDetail, Goals, Reserve } from './screens/Goals'
 import { Accounts, Commitments, More, Purchases, Recurring } from './screens/Manage'
 import { CardDetail, Cards } from './screens/Cards'
+import { Compare } from './screens/Compare'
 import { Alerts, Insights, Planning, Reports, Search } from './screens/Analysis'
 import { LockScreen, Settings } from './screens/Settings'
 import { computeAlerts } from './lib/projections'
@@ -25,12 +26,13 @@ const TABS = [
 ]
 const TAB_OF: Record<string, string> = {
   reserva: 'metas',
+  amortizar: 'financiamentos',
   compras: 'saidas',
   recorrentes: 'saidas',
 }
 
 function Screen({ route }: { route: string[] }) {
-  const [r, id] = route
+  const [r, id, sub] = route
   switch (r) {
     case 'inicio':
       return <Dashboard />
@@ -39,7 +41,7 @@ function Screen({ route }: { route: string[] }) {
     case 'saidas':
       return <TxList key="out" kind="out" />
     case 'financiamentos':
-      return id ? <FinancingDetail id={id} /> : <Financings />
+      return id ? <FinancingDetail key={id + (sub ?? '')} id={id} initialTab={sub === 'simular' ? 'simulador' : undefined} /> : <Financings />
     case 'metas':
       return id ? <GoalDetail id={id} /> : <Goals />
     case 'reserva':
@@ -58,6 +60,8 @@ function Screen({ route }: { route: string[] }) {
       return <Recurring />
     case 'planejamento':
       return <Planning />
+    case 'amortizar':
+      return <Compare />
     case 'situacao':
       return <Insights />
     case 'alertas':

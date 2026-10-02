@@ -43,6 +43,7 @@ export function parseImport(text: string): ImportPayload {
       n: Math.round(n),
       installment: num(f.installment),
       monthlyFees: num(f.monthlyFees),
+      indexMonthly: num(f.indexMonthly),
       firstDate: f.firstDate,
       paidCount: Math.max(0, Math.round(num(f.paidCount) ?? 0)),
       balanceInformed: num(f.balanceInformed),

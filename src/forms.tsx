@@ -785,6 +785,14 @@ function FinancingForm({ id, initial }: { id?: string; initial?: Record<string, 
         <NumberField label="Nº de parcelas" value={s.n} onChange={(v) => set('n', Math.max(1, Math.min(600, v ?? 1)))} />
         <MoneyField label="Valor da parcela" value={s.installment} onChange={(v) => set('installment', v)} hint="Se souber" />
       </div>
+      <NumberField
+        label="Correção do saldo ao mês (opcional)"
+        suffix="%"
+        decimals
+        value={s.indexMonthly != null ? Math.round(s.indexMonthly * 1000000) / 10000 : undefined}
+        onChange={(v) => set('indexMonthly', v != null ? v / 100 : undefined)}
+        hint="Para contratos corrigidos por IPCA ou TR (ex.: IPCA ≈ 0,35% ao mês). Usado na comparação “Onde amortizar”."
+      />
       <MoneyField
         label="Seguros e taxas por mês (opcional)"
         value={s.monthlyFees}
