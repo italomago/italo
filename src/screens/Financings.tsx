@@ -188,11 +188,12 @@ export function FinancingDetail({ id }: { id: string }) {
             {f.downPayment ? <KV k="Entrada" v={fmtBRL(f.downPayment)} /> : null}
             <KV k="Taxa de juros" v={`${fmtPct(s.resolved.rate, 2)} a.m. · ${fmtPct(s.resolved.annualRate, 2)} a.a.${s.resolved.rateEstimated ? ' (estimada)' : ''}`} />
             <KV k="Sistema" v={s.resolved.system === 'SAC' ? 'SAC' : `Price${s.resolved.systemAssumed ? ' (assumido)' : ''}`} />
+            {s.resolved.fees > 0 && <KV k="Seguros e taxas por mês" v={fmtBRL(s.resolved.fees)} />}
             <KV k="Parcelas" v={`${s.paidCount} pagas · ${s.remainingCount} restantes`} />
             <KV k="1ª / última parcela" v={`${fmtDate(s.schedule[0]?.date)} → ${fmtDate(s.schedule[s.schedule.length - 1]?.date)}`} />
-            <KV k="Total já pago" v={<span className="pos">{fmtBRL(s.totalPaid)}</span>} />
+            <KV k={`Total já pago${s.balanceSource === 'informado' ? ' (estimado)' : ''}`} v={<span className="pos">{fmtBRL(s.totalPaid)}</span>} />
             <KV k="Total que falta pagar" v={fmtBRL(s.totalRemaining)} />
-            <KV k="Juros já pagos" v={fmtBRL(s.interestPaid)} />
+            <KV k={`Juros já pagos${s.balanceSource === 'informado' ? ' (estimado)' : ''}`} v={fmtBRL(s.interestPaid)} />
             <KV k="Juros futuros" v={fmtBRL(s.interestRemaining)} />
             <KV k="Total de juros estimado" v={<span className="neg">{fmtBRL(s.totalInterest)}</span>} />
             <KV k="Custo total" v={fmtBRL(s.totalCost)} total />

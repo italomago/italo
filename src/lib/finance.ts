@@ -71,6 +71,7 @@ export interface FinancingInput {
   paidCount?: number
   system?: AmortSystem
   balanceInformed?: number // saldo devedor informado pela instituição
+  monthlyFees?: number // seguros e taxas fixas cobrados junto com a parcela
 }
 
 export interface ResolvedFinancing {
@@ -107,11 +108,13 @@ export function resolveFinancing(f: FinancingInput): ResolvedFinancing {
         : undefined
   let rateEstimated = false
 
+  const explicitFees = f.monthlyFees != null && f.monthlyFees > 0 ? f.monthlyFees : 0
   if (rate == null) {
     rateEstimated = true
-    if (f.installment && f.installment > 0) {
-      if (system === 'PRICE') rate = solveRate(principal, f.installment, n)
-      else rate = Math.max(0, (f.installment - principal / n) / principal)
+    const core = (f.installment ?? 0) - explicitFees
+    if (core > 0) {
+      if (system === 'PRICE') rate = solveRate(principal, core, n)
+      else rate = Math.max(0, (core - principal / n) / principal)
       warnings.push('Taxa de juros não informada: estimada a partir do valor da parcela (pode incluir seguros e tarifas).')
     } else {
       rate = 0
@@ -121,10 +124,10 @@ export function resolveFinancing(f: FinancingInput): ResolvedFinancing {
 
   let corePayment: number
   let amortization = 0
-  let fees = 0
+  let fees = explicitFees
   if (system === 'PRICE') {
     corePayment = pmt(principal, rate, n)
-    if (f.installment && f.installment > 0 && !rateEstimated) {
+    if (f.installment && f.installment > 0 && !rateEstimated && !explicitFees) {
       const diff = f.installment - corePayment
       if (diff > 0.05) {
         fees = diff
@@ -139,7 +142,7 @@ export function resolveFinancing(f: FinancingInput): ResolvedFinancing {
   } else {
     amortization = principal / n
     corePayment = amortization + principal * rate
-    if (f.installment && f.installment > 0 && !rateEstimated) {
+    if (f.installment && f.installment > 0 && !rateEstimated && !explicitFees) {
       const diff = f.installment - corePayment
       if (diff > 0.05) {
         fees = diff
@@ -164,24 +167,25 @@ export function resolveFinancing(f: FinancingInput): ResolvedFinancing {
 }
 
 /** Cronograma completo, mês a mês. A última parcela é ajustada para zerar o saldo. */
-export function buildSchedule(r: ResolvedFinancing, firstDate: ISODate): ScheduleRow[] {
+export function buildSchedule(r: ResolvedFinancing, firstDate: ISODate, anchorDay?: number): ScheduleRow[] {
   const rows: ScheduleRow[] = []
-  let balance = r.principal
-  const anchor = Number(firstDate.slice(8, 10))
+  const anchor = anchorDay ?? Number(firstDate.slice(8, 10))
+  // Valores em centavos a cada mês, como nos carnês: amortização arredondada é a que abate o saldo.
+  let balance = round2(r.principal)
+  const fees = round2(r.fees)
   for (let k = 1; k <= r.n; k++) {
-    const interest = balance * r.rate
-    let amort = r.system === 'PRICE' ? r.corePayment - interest : r.amortization
+    const interest = round2(balance * r.rate)
+    let amort = round2(r.system === 'PRICE' ? r.corePayment - interest : r.amortization)
     if (k === r.n || amort > balance) amort = balance
-    balance = balance - amort
-    if (Math.abs(balance) < 0.005) balance = 0
+    balance = round2(balance - amort)
     rows.push({
       k,
       date: addMonths(firstDate, k - 1, anchor),
-      payment: round2(amort + interest + r.fees),
-      interest: round2(interest),
-      amortization: round2(amort),
-      fees: round2(r.fees),
-      balance: round2(Math.max(0, balance)),
+      payment: round2(amort + interest + fees),
+      interest,
+      amortization: amort,
+      fees,
+      balance: Math.max(0, balance),
     })
   }
   return rows
@@ -208,8 +212,27 @@ export interface FinancingSummary {
 
 export function summarizeFinancing(f: FinancingInput): FinancingSummary {
   const resolved = resolveFinancing(f)
-  const schedule = buildSchedule(resolved, f.firstDate)
+  let schedule = buildSchedule(resolved, f.firstDate)
   const paidCount = Math.min(Math.max(0, Math.round(f.paidCount ?? 0)), schedule.length)
+  const informed = f.balanceInformed != null && f.balanceInformed > 0
+  if (informed && paidCount < schedule.length) {
+    // Parcelas futuras recalculadas a partir do saldo devedor informado pelo banco
+    // (contratos corrigidos por IPCA/TR, renegociações etc.).
+    const remaining = schedule.length - paidCount
+    const B = f.balanceInformed!
+    const rebased = buildSchedule(
+      {
+        ...resolved,
+        principal: B,
+        n: remaining,
+        corePayment: resolved.system === 'PRICE' ? pmt(B, resolved.rate, remaining) : B / remaining + B * resolved.rate,
+        amortization: B / remaining,
+      },
+      schedule[paidCount].date,
+      Number(f.firstDate.slice(8, 10)),
+    ).map((r) => ({ ...r, k: r.k + paidCount }))
+    schedule = [...schedule.slice(0, paidCount), ...rebased]
+  }
   const paid = schedule.slice(0, paidCount)
   const rest = schedule.slice(paidCount)
   const sumOf = (rows: ScheduleRow[], key: 'payment' | 'interest') => round2(rows.reduce((a, r) => a + r[key], 0))
@@ -217,7 +240,6 @@ export function summarizeFinancing(f: FinancingInput): FinancingSummary {
   const totalRemaining = sumOf(rest, 'payment')
   const totalCost = round2(totalPaid + totalRemaining)
   const calcBalance = paidCount === 0 ? resolved.principal : schedule[paidCount - 1].balance
-  const informed = f.balanceInformed != null && f.balanceInformed > 0
   return {
     resolved,
     schedule,
