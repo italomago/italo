@@ -118,6 +118,13 @@ export interface Debt {
   offer?: number // proposta para quitar à vista (com desconto)
   /** false = ainda sem acordo/pagamento programado: não gera lançamentos, entra no plano de pagamento. */
   scheduled?: boolean
+  /** Parcelas com datas e valores livres (acordo que não é mensal). */
+  customSchedule?: DebtInstallment[]
+}
+
+export interface DebtInstallment {
+  date: ISODate
+  amount: number
 }
 
 export type DebtKind = 'protesto' | 'negativado' | 'atrasada' | 'acordo' | 'emprestimo' | 'cartao' | 'outra'

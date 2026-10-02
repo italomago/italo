@@ -20,7 +20,7 @@ import {
 } from './components/ui'
 import { uid } from './lib/defaults'
 import { addMonths, fmtDate, monthLabel, today, type ISODate } from './lib/dates'
-import { fmtBRL, fmtPct, round2, splitInstallments } from './lib/money'
+import { fmtBRL, fmtNum, fmtPct, parseMoney, round2, splitInstallments } from './lib/money'
 import { annualToMonthly, monthlyToAnnual, monthsToGoal, summarizeFinancing } from './lib/finance'
 import { invoiceDueDate, invoiceFor } from './lib/generate'
 import { parseQuick } from './lib/parser'
@@ -31,6 +31,7 @@ import type {
   Account,
   Card,
   Debt,
+  DebtInstallment,
   DebtKind,
   Financing,
   Frequency,
@@ -849,6 +850,76 @@ function FinancingForm({ id, initial }: { id?: string; initial?: Record<string, 
 // Dívida
 // ---------------------------------------------------------------------------
 
+/** Lista de parcelas com data e valor livres. */
+function CustomInstallments({
+  rows,
+  onChange,
+  suggestedTotal,
+}: {
+  rows: DebtInstallment[]
+  onChange: (rows: DebtInstallment[]) => void
+  suggestedTotal?: number
+}) {
+  const [total, setTotal] = useState<number | undefined>(suggestedTotal ?? (sumRows(rows) || undefined))
+  const [count, setCount] = useState<number | undefined>(rows.length > 1 ? rows.length : 4)
+  const sum = sumRows(rows)
+  const update = (i: number, patch: Partial<DebtInstallment>) => onChange(rows.map((r, k) => (k === i ? { ...r, ...patch } : r)))
+  const split = () => {
+    if (!total || !count) return
+    const parts = splitInstallments(total, count)
+    const first = rows[0]?.date ?? today()
+    // mantém as datas já escolhidas; as novas começam um mês depois da anterior
+    onChange(parts.map((amount, i) => ({ amount, date: rows[i]?.date ?? addMonths(first, i) })))
+  }
+  return (
+    <div className="card" style={{ marginBottom: 12 }}>
+      <h3>Parcelas do acordo</h3>
+      <div className="two">
+        <MoneyField label="Valor total do acordo" value={total} onChange={setTotal} />
+        <NumberField label="Nº de parcelas" value={count} onChange={(v) => setCount(v ? Math.min(120, v) : undefined)} />
+      </div>
+      <button type="button" className="btn secondary sm" onClick={split} disabled={!total || !count} style={{ marginBottom: 12 }}>
+        Dividir em parcelas iguais
+      </button>
+      {rows.map((r, i) => (
+        <div key={i} className="inst-row">
+          <span className="step-num">{i + 1}</span>
+          <input type="date" className="input" value={r.date} onChange={(e) => e.target.value && update(i, { date: e.target.value })} aria-label={`Data da parcela ${i + 1}`} />
+          <input
+            className="input num"
+            inputMode="decimal"
+            defaultValue={r.amount ? fmtNum(r.amount) : ''}
+            key={`${i}-${r.amount}`}
+            placeholder="0,00"
+            aria-label={`Valor da parcela ${i + 1}`}
+            onBlur={(e) => update(i, { amount: parseMoney(e.target.value) ?? 0 })}
+          />
+          <button type="button" className="icon-btn" aria-label={`Remover parcela ${i + 1}`} onClick={() => onChange(rows.filter((_, k) => k !== i))}>
+            ✕
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn ghost sm"
+        onClick={() => onChange([...rows, { date: rows.length ? addMonths(rows[rows.length - 1].date, 1) : today(), amount: rows[rows.length - 1]?.amount ?? 0 }])}
+      >
+        + Adicionar parcela
+      </button>
+      <div className="between small" style={{ marginTop: 8 }}>
+        <span className="muted">{rows.length} parcela(s)</span>
+        <b className="num">Total {fmtBRL(sum)}</b>
+      </div>
+      {total != null && total > 0 && Math.abs(total - sum) > 0.009 && rows.length > 0 && (
+        <div className="note warn" style={{ marginTop: 8, marginBottom: 0 }}>
+          A soma das parcelas ({fmtBRL(sum)}) é diferente do total do acordo ({fmtBRL(total)}).
+        </div>
+      )}
+    </div>
+  )
+}
+const sumRows = (rows: DebtInstallment[]) => round2(rows.reduce((a, r) => a + (r.amount || 0), 0))
+
 export const DEBT_KINDS: { value: DebtKind; label: string; icon: string }[] = [
   { value: 'protesto', label: 'Protesto', icon: '⚖️' },
   { value: 'negativado', label: 'Nome negativado', icon: '🚫' },
@@ -886,12 +957,25 @@ function DebtForm({ id, initial }: { id?: string; initial?: Record<string, unkno
   const [ratePct, setRatePct] = useState<number | undefined>(s.interest != null ? round2(s.interest * 10000) / 100 : undefined)
   const scheduled = s.scheduled !== false
   const balance = s.balance ?? 0
-  const valid = !!s.name.trim() && (scheduled ? s.amount > 0 : balance > 0)
+  const custom = scheduled && !!s.customSchedule
+  const customRows = (s.customSchedule ?? []).filter((r) => r.amount > 0 && r.date).sort((a, b) => a.date.localeCompare(b.date))
+  const valid = !!s.name.trim() && (scheduled ? (custom ? customRows.length > 0 : s.amount > 0) : balance > 0)
   const total = s.recurring && s.installments > 0 ? s.amount * s.installments : s.amount
   const discount = s.offer && balance > 0 && s.offer < balance ? balance - s.offer : 0
   const save = () => {
     const interest = ratePct != null ? ratePct / 100 : undefined
-    if (scheduled) actions.saveDebt({ ...s, interest, scheduled: true, installments: s.recurring ? s.installments : 1 })
+    if (custom)
+      actions.saveDebt({
+        ...s,
+        interest,
+        scheduled: true,
+        recurring: true,
+        customSchedule: customRows,
+        installments: customRows.length,
+        amount: customRows[0].amount,
+        firstDue: customRows[0].date,
+      })
+    else if (scheduled) actions.saveDebt({ ...s, interest, scheduled: true, customSchedule: undefined, installments: s.recurring ? s.installments : 1 })
     else actions.saveDebt({ ...s, interest, scheduled: false, amount: balance, recurring: false, installments: 1 })
     toast(existing ? 'Dívida atualizada' : 'Dívida cadastrada')
     closeForm()
@@ -955,30 +1039,52 @@ function DebtForm({ id, initial }: { id?: string; initial?: Record<string, unkno
         </>
       ) : (
         <>
-          <MoneyField label={s.recurring ? 'Valor de cada parcela' : 'Valor'} value={s.amount || undefined} onChange={(v) => set('amount', v ?? 0)} big />
           <Field label="Forma">
             <Seg
               options={[
-                { value: 'u', label: 'Pagamento único' },
-                { value: 'p', label: 'Parcelado / mensal' },
+                { value: 'u', label: 'Única' },
+                { value: 'p', label: 'Mensal' },
+                { value: 'c', label: 'Datas que eu escolho' },
               ]}
-              value={s.recurring ? 'p' : 'u'}
-              onChange={(v) => set('recurring', v === 'p')}
+              value={custom ? 'c' : s.recurring ? 'p' : 'u'}
+              onChange={(v) =>
+                setS((prev) => ({
+                  ...prev,
+                  recurring: v !== 'u',
+                  customSchedule:
+                    v === 'c'
+                      ? prev.customSchedule?.length
+                        ? prev.customSchedule
+                        : [{ date: prev.firstDue, amount: prev.amount || 0 }]
+                      : undefined,
+                }))
+              }
             />
           </Field>
-          <div className="two">
-            <DateField label={s.recurring ? '1º vencimento' : 'Vencimento'} value={s.firstDue} onChange={(v) => set('firstDue', v)} />
-            {s.recurring && (
-              <NumberField label="Nº de parcelas" value={s.installments} onChange={(v) => set('installments', Math.max(0, Math.min(600, v ?? 0)))} hint="0 = sem prazo" />
-            )}
-          </div>
+          {custom ? (
+            <CustomInstallments
+              rows={s.customSchedule ?? []}
+              onChange={(rows) => set('customSchedule', rows)}
+              suggestedTotal={s.offer ?? s.balance}
+            />
+          ) : (
+            <>
+              <MoneyField label={s.recurring ? 'Valor de cada parcela' : 'Valor'} value={s.amount || undefined} onChange={(v) => set('amount', v ?? 0)} big />
+              <div className="two">
+                <DateField label={s.recurring ? '1º vencimento' : 'Vencimento'} value={s.firstDue} onChange={(v) => set('firstDue', v)} />
+                {s.recurring && (
+                  <NumberField label="Nº de parcelas" value={s.installments} onChange={(v) => set('installments', Math.max(0, Math.min(600, v ?? 0)))} hint="0 = sem prazo" />
+                )}
+              </div>
+            </>
+          )}
           {s.recurring && (
             <div className="two">
               <NumberField label="Parcelas pagas" value={s.paidCount} onChange={(v) => set('paidCount', Math.max(0, v ?? 0))} />
               <NumberField label="Juros ao mês" suffix="%" decimals value={ratePct} onChange={setRatePct} />
             </div>
           )}
-          {s.recurring && s.installments > 0 && (
+          {s.recurring && !custom && s.installments > 0 && (
             <div className="note">
               Restam <b>{Math.max(0, s.installments - s.paidCount)}</b> parcelas · total {fmtBRL(total)} · falta{' '}
               <b>{fmtBRL(Math.max(0, s.installments - s.paidCount) * s.amount)}</b>

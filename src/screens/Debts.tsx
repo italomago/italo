@@ -364,7 +364,7 @@ function Plan() {
             {plan.scheduled.map((s) => (
               <KV
                 key={s.id}
-                k={`${s.name} · ${s.remaining}x ${fmtBRL(s.installment)}`}
+                k={s.installment ? `${s.name} · ${s.remaining}x ${fmtBRL(s.installment)}` : `${s.name} · ${s.remaining} parcela(s) · ${fmtBRL(s.remainingValue)}`}
                 v={s.endMonth ? `termina ${monthLabel(s.endMonth, true)}` : '—'}
               />
             ))}

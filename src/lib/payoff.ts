@@ -75,7 +75,8 @@ export function planPayoff(
         name: d.name,
         creditor: d.creditor,
         kind: debtKind(d),
-        installment: d.amount,
+        // acordo com datas livres não libera um valor mensal fixo quando termina
+        installment: d.customSchedule?.length ? 0 : d.amount,
         remaining: open.length,
         remainingValue: round2(open.reduce((a, t) => a + t.amount, 0)),
         endMonth: open.length ? monthKey(open[open.length - 1].date) : null,
