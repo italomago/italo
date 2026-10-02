@@ -50,6 +50,7 @@ export type FormType =
   | 'recorrente'
   | 'cartao'
   | 'conta'
+  | 'lote'
   | 'tipo'
   | 'tx'
 export interface FormSpec {

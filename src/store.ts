@@ -141,6 +141,18 @@ export const actions = {
       return next
     })
   },
+  /** Várias recorrências de uma vez (uma única gravação). */
+  saveRecurrences(list: Recurrence[]) {
+    update((d) => {
+      let transactions = d.transactions
+      let recurrences = d.recurrences
+      for (const r of list) {
+        recurrences = upsert(recurrences, r)
+        transactions = mergeSource(transactions, 'recurring', r.id, recurrenceDrafts(r, d.cards, horizon()), { pastAsPaid: true })
+      }
+      return { ...d, recurrences, transactions }
+    })
+  },
   deleteRecurrence(id: string) {
     update((d) => ({
       ...d,
