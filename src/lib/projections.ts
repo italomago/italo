@@ -456,3 +456,33 @@ export function bucketOf(t: Transaction, ref: ISODate = today()) {
   if (d <= 30) return '30dias'
   return 'futuras'
 }
+
+// ---------------------------------------------------------------------------
+// Painel de cartões
+// ---------------------------------------------------------------------------
+
+/**
+ * Compras feitas no cartão em um mês (pela data da compra, não da fatura).
+ * Uma compra parcelada conta pelo valor total no mês em que foi feita.
+ */
+export function cardSpending(data: AppData, month: string, cardId?: string) {
+  const items = data.transactions.filter(
+    (t) => t.kind === 'out' && t.cardId && (!cardId || t.cardId === cardId) && monthKey(t.purchaseDate ?? t.date) === month,
+  )
+  const byCategory = new Map<string, number>()
+  for (const t of items) byCategory.set(t.categoryId ?? 'outros-out', (byCategory.get(t.categoryId ?? 'outros-out') ?? 0) + t.amount)
+  return {
+    total: sum(items.map((t) => t.amount)),
+    items,
+    byCategory: [...byCategory.entries()].map(([id, value]) => ({ id, value: round2(value) })).sort((a, b) => b.value - a.value),
+  }
+}
+
+/** Como o limite usado se divide: faturas fechadas em aberto, fatura atual e parcelas futuras. */
+export function limitBreakdown(data: AppData, card: Card, ref: ISODate = today()) {
+  const u = cardUsage(data, card, ref)
+  const unpaid = (i: Invoice) => round2(i.total - i.paidTotal)
+  const closed = sum(u.previous.map(unpaid))
+  const current = u.current ? unpaid(u.current) : 0
+  return { ...u, closed, currentOpen: current, future: round2(u.used - closed - current) }
+}

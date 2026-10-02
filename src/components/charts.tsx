@@ -105,14 +105,14 @@ export function GroupedBars({ data, series, height = H }: { data: { label: strin
 }
 
 /** Barras empilhadas (ex.: parcelas por tipo ao longo dos meses). */
-export function StackedBars({ data, series }: { data: { label: string; values: Record<string, number> }[]; series: Series[] }) {
+export function StackedBars({ data, series, initial = 0 }: { data: { label: string; values: Record<string, number> }[]; series: Series[]; initial?: number }) {
   const [sel, setSel] = useState<number | null>(null)
   const totals = data.map((d) => series.reduce((a, s) => a + (d.values[s.key] ?? 0), 0))
   const { y, ticks } = scale(0, Math.max(0, ...totals))
   const iw = W - PAD.l - PAD.r
   const step = iw / Math.max(1, data.length)
   const bw = Math.min(20, step * 0.62)
-  const cur = sel ?? 0
+  const cur = sel ?? initial
   return (
     <div>
       <Legend series={series} />

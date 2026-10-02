@@ -1,14 +1,13 @@
 // Mais, Compras, Cartões, Contas, Dívidas e Compromissos, Contas recorrentes.
 import { useState } from 'react'
-import { actions, useData } from '../store'
-import { Empty, KV, Money, Progress, Section, Seg, Stat, TopBar, openForm, toast } from '../components/ui'
+import { useData } from '../store'
+import { Empty, KV, Money, Progress, Section, Seg, Stat, TopBar, openForm } from '../components/ui'
 import { HBars } from '../components/charts'
 import { TxRow } from '../components/TxRow'
 import { navigate } from '../router'
-import { fmtDate, fmtDateShort, monthLabel, today } from '../lib/dates'
+import { fmtDate, fmtDateShort, today } from '../lib/dates'
 import { fmtBRL, splitInstallments, sum } from '../lib/money'
-import { accountBalance, bucketOf, cardInvoices, cardUsage, computeAlerts } from '../lib/projections'
-import { invoiceClosingDate } from '../lib/generate'
+import { accountBalance, bucketOf, cardInvoices, computeAlerts } from '../lib/projections'
 import type { PurchaseStatus } from '../lib/types'
 
 const MENU: { path: string; icon: string; label: string }[] = [
@@ -16,7 +15,6 @@ const MENU: { path: string; icon: string; label: string }[] = [
   { path: 'planejamento', icon: '🗓️', label: 'Próximos meses' },
   { path: 'compromissos', icon: '📄', label: 'Dívidas e compromissos' },
   { path: 'compras', icon: '🛍️', label: 'Compras' },
-  { path: 'cartoes', icon: '💳', label: 'Cartões' },
   { path: 'recorrentes', icon: '🔄', label: 'Contas recorrentes' },
   { path: 'contas', icon: '🏦', label: 'Contas' },
   { path: 'reserva', icon: '🛟', label: 'Reserva' },
@@ -153,187 +151,6 @@ export function Purchases() {
         <div className="card">
           <Empty icon="🛍️" title="Nenhuma compra aqui" text="Registre compras do Mercado Livre, Amazon, Shopee, lojas físicas…" action="+ Nova compra" onAction={() => openForm({ type: 'compra' })} />
         </div>
-      )}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Cartões
-// ---------------------------------------------------------------------------
-
-export function Cards() {
-  const data = useData()
-  return (
-    <div className="screen">
-      <TopBar
-        title="Cartões"
-        showBack
-        right={
-          <button className="icon-btn" onClick={() => openForm({ type: 'cartao' })} aria-label="Novo cartão">
-            ＋
-          </button>
-        }
-      />
-      {data.cards.length ? (
-        data.cards.map((c) => {
-          const u = cardUsage(data, c)
-          return (
-            <div key={c.id} className="card" role="button" style={{ cursor: 'pointer' }} onClick={() => navigate('cartoes/' + c.id)}>
-              <div className="between">
-                <div>
-                  <div className="bold">💳 {c.name}</div>
-                  <div className="tiny muted">
-                    {[c.bank, `fecha dia ${c.closingDay}`, `vence dia ${c.dueDay}`].filter(Boolean).join(' · ')}
-                  </div>
-                </div>
-                <div className="end" style={{ textAlign: 'right' }}>
-                  <div className="tiny muted">Fatura {monthLabel(u.openInvoice, true)}</div>
-                  <b>
-                    <Money value={u.current?.total ?? 0} />
-                  </b>
-                </div>
-              </div>
-              <div style={{ margin: '10px 0 6px' }}>
-                <Progress pct={u.pct} tone={u.pct > 0.9 ? 'neg' : u.pct > 0.7 ? 'warn' : undefined} />
-              </div>
-              <div className="between tiny">
-                <span>
-                  Usado <Money value={u.used} />
-                </span>
-                <span>
-                  Disponível <b><Money value={u.available} /></b> de <Money value={c.limit} />
-                </span>
-              </div>
-            </div>
-          )
-        })
-      ) : (
-        <div className="card">
-          <Empty
-            icon="💳"
-            title="Nenhum cartão"
-            text="Cadastre seus cartões com dia de fechamento e vencimento. As compras parceladas são distribuídas nas faturas automaticamente."
-            action="+ Novo cartão"
-            onAction={() => openForm({ type: 'cartao' })}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
-
-export function CardDetail({ id }: { id: string }) {
-  const data = useData()
-  const card = data.cards.find((c) => c.id === id)
-  const [sel, setSel] = useState<string | null>(null)
-  if (!card) return <div className="screen"><TopBar title="Cartão não encontrado" showBack /></div>
-  const u = cardUsage(data, card)
-  const invoices = cardInvoices(data, card)
-  const month = sel ?? u.openInvoice
-  const inv = invoices.find((i) => i.month === month)
-  const idx = invoices.findIndex((i) => i.month === month)
-  return (
-    <div className="screen">
-      <TopBar
-        title={card.name}
-        sub={[card.bank, `fecha dia ${card.closingDay}`, `vence dia ${card.dueDay}`].filter(Boolean).join(' · ')}
-        showBack
-        right={
-          <button className="icon-btn" onClick={() => openForm({ type: 'cartao', id: card.id })} aria-label="Editar">
-            ✏️
-          </button>
-        }
-      />
-      <div className="grid2">
-        <Stat label="Limite" value={card.limit} />
-        <Stat label="Disponível" value={u.available} tone={u.available < 0 ? 'neg' : 'pos'} hint={`${Math.round(u.pct * 100)}% usado`} />
-      </div>
-
-      <Section title="Faturas" />
-      <div className="chips">
-        {invoices.map((i) => (
-          <button key={i.month} className={`chip ${i.month === month ? 'on' : ''}`} onClick={() => setSel(i.month)}>
-            {monthLabel(i.month, true)} {i.paid ? '✓' : ''}
-          </button>
-        ))}
-        {!invoices.length && <span className="small muted">Sem faturas ainda</span>}
-      </div>
-      {inv ? (
-        <>
-          <div className="card">
-            <div className="between">
-              <div>
-                <div className="tiny muted">
-                  {month === u.openInvoice ? 'Fatura atual (aberta)' : month < u.openInvoice ? 'Fatura fechada' : 'Próxima fatura'} · fecha {fmtDate(invoiceClosingDate(card, month))}
-                </div>
-                <div style={{ fontSize: 26, fontWeight: 800 }}>
-                  <Money value={inv.total} />
-                </div>
-                <div className="tiny muted">Vence {fmtDate(inv.dueDate)}</div>
-              </div>
-              {inv.paid ? (
-                <button className="btn sm secondary" onClick={() => actions.payInvoice(card.id, month, undefined, false)}>
-                  ✓ Paga
-                </button>
-              ) : (
-                <button
-                  className="btn sm"
-                  onClick={() => {
-                    actions.payInvoice(card.id, month, card.accountId)
-                    toast('Fatura paga')
-                  }}
-                >
-                  Pagar fatura
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="card tight">
-            {inv.items.map((t) => (
-              <TxRow key={t.id} t={t} />
-            ))}
-          </div>
-          {idx >= 0 && invoices.length > 1 && (
-            <>
-              <Section title="Próximas faturas" />
-              <div className="card">
-                {u.next.slice(0, 12).map((i) => (
-                  <KV key={i.month} k={monthLabel(i.month)} v={fmtBRL(i.total)} />
-                ))}
-                {!u.next.length && <div className="small muted">Nenhuma parcela futura.</div>}
-              </div>
-            </>
-          )}
-        </>
-      ) : (
-        <div className="card small muted center">Nenhum lançamento nesta fatura.</div>
-      )}
-      {u.installmentsActive.length > 0 && (
-        <>
-          <Section title="Compras parceladas" />
-          <div className="card tight">
-            {u.installmentsActive.map((p) => {
-              const paidN = data.transactions.filter((t) => t.source.type === 'purchase' && t.source.id === p.id && t.paid).length
-              return (
-                <div key={p.id} className="list-item" role="button" onClick={() => openForm({ type: 'compra', id: p.id })}>
-                  <div className="ic">🛍️</div>
-                  <div className="main">
-                    <div className="title">{[p.platform, p.product].filter(Boolean).join(' — ')}</div>
-                    <div className="meta">
-                      {paidN}/{p.installments} pagas · {fmtDateShort(p.date)}
-                    </div>
-                  </div>
-                  <div className="end">
-                    <div className="amount">
-                      {p.installments}x <Money value={splitInstallments(p.total, p.installments)[1]} />
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </>
       )}
     </div>
   )
