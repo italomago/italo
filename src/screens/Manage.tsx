@@ -358,7 +358,11 @@ export function Recurring() {
           </div>
         </div>
         <div className="end amount">
-          <Money value={r.kind === 'in' ? r.amount : -r.amount} className={r.kind === 'in' ? 'pos' : ''} />
+          {r.amount === 0 ? (
+            <span className="badge warn">definir valor</span>
+          ) : (
+            <Money value={r.kind === 'in' ? r.amount : -r.amount} className={r.kind === 'in' ? 'pos' : ''} />
+          )}
         </div>
       </div>
     )
@@ -378,6 +382,15 @@ export function Recurring() {
         <Stat label="Despesas fixas / mês" value={totalOut} tone="neg" />
         <Stat label="Receitas fixas / mês" value={totalIn} tone="pos" />
       </div>
+      <div className="spacer" />
+      <button className="btn secondary" onClick={() => openForm({ type: 'lote' })}>
+        📋 Adicionar várias de uma vez
+      </button>
+      {outs.some((r) => r.amount === 0) && (
+        <div className="note warn" style={{ marginTop: 10 }}>
+          {outs.filter((r) => r.amount === 0).length} despesa(s) sem valor. Toque nelas para informar o valor.
+        </div>
+      )}
       <Section title="Despesas" />
       {outs.length ? <div className="card tight">{outs.map(row)}</div> : (
         <div className="card">

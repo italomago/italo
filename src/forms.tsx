@@ -24,6 +24,7 @@ import { fmtBRL, fmtPct, round2, splitInstallments } from './lib/money'
 import { annualToMonthly, monthlyToAnnual, monthsToGoal, summarizeFinancing } from './lib/finance'
 import { invoiceDueDate, invoiceFor } from './lib/generate'
 import { parseQuick } from './lib/parser'
+import { parseBulk } from './lib/bulk'
 import { navigate } from './router'
 import type {
   Account,
@@ -1104,6 +1105,75 @@ function RecurrenceForm({ id }: { id?: string }) {
   )
 }
 
+/** Cadastro de várias despesas fixas de uma vez (lista colada, uma por linha). */
+function BulkRecurrenceForm() {
+  const data = useData()
+  const [text, setText] = useState('')
+  const [day, setDay] = useState<number | undefined>(10)
+  const items = useMemo(() => parseBulk(text), [text])
+  const existing = new Set(data.recurrences.map((r) => r.description.trim().toLowerCase()))
+  const fresh = items.filter((i) => !existing.has(i.name.toLowerCase()))
+  const catLabel = (id: string) => {
+    const c = data.categories.find((x) => x.id === id)
+    return c ? `${c.icon} ${c.name}` : id
+  }
+  const save = () => {
+    const t0 = today()
+    actions.saveRecurrences(
+      fresh.map((i) => ({
+        id: uid(),
+        kind: 'out' as const,
+        description: i.name,
+        amount: i.amount,
+        variable: i.amount === 0,
+        day: i.day ?? day ?? 10,
+        frequency: 'mensal' as const,
+        start: t0,
+        categoryId: i.categoryId,
+        method: 'Boleto',
+        accountId: data.accounts.find((a) => !a.archived)?.id,
+        active: true,
+      })),
+    )
+    toast(`${fresh.length} despesas fixas adicionadas`)
+    closeForm()
+  }
+  return (
+    <Sheet
+      title="Adicionar várias despesas fixas"
+      onClose={closeForm}
+      footer={<Footer onSave={save} disabled={!fresh.length} label={fresh.length ? `Adicionar ${fresh.length} despesa(s)` : 'Adicionar'} />}
+    >
+      <div className="note">
+        Cole a lista com <b>uma despesa por linha</b>. Pode ter só o nome, ou também valor e dia, por exemplo: <b>Gazin 175 todo dia 15</b>. As que ficarem sem valor você completa depois, tocando nelas.
+      </div>
+      <Field label="Lista de despesas">
+        <textarea id="bulk-text" rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Aluguel 1.500 todo dia 10\nEnergia\nInternet 120'} />
+      </Field>
+      <NumberField label="Dia de vencimento para as que não informarem" value={day} onChange={(v) => setDay(v != null ? Math.max(1, Math.min(31, v)) : undefined)} />
+      {items.length > 0 && (
+        <div className="card tight" style={{ marginBottom: 12 }}>
+          {items.map((i, k) => {
+            const dup = existing.has(i.name.toLowerCase())
+            return (
+              <div key={k} className="list-item" style={{ opacity: dup ? 0.5 : 1 }}>
+                <div className="main">
+                  <div className="title">{i.name}</div>
+                  <div className="meta">
+                    {catLabel(i.categoryId)} · todo dia {i.day ?? day ?? 10}
+                    {dup && ' · já cadastrada'}
+                  </div>
+                </div>
+                <div className="end">{i.amount > 0 ? <b className="num">{fmtBRL(i.amount)}</b> : <span className="badge warn">definir valor</span>}</div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Cartão e conta
 // ---------------------------------------------------------------------------
@@ -1228,6 +1298,8 @@ export function FormHost() {
       return <CardForm key={key} id={spec.id} initial={spec.initial} />
     case 'conta':
       return <AccountForm key={key} id={spec.id} />
+    case 'lote':
+      return <BulkRecurrenceForm key={key} />
   }
 }
 
