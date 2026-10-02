@@ -104,6 +104,24 @@ export function purchaseDrafts(p: Purchase, cards: Card[]): Draft[] {
 
 export function debtDrafts(d: Debt, until: ISODate): Draft[] {
   if (d.scheduled === false) return [] // sem acordo ainda: fica só no plano de pagamento
+  const description = `${d.name}${d.creditor ? ` (${d.creditor})` : ''}`
+  if (d.customSchedule?.length) {
+    // acordo com datas e valores escolhidos (não mensal)
+    const rows = [...d.customSchedule].filter((r) => r.amount > 0 && r.date).sort((a, b) => a.date.localeCompare(b.date))
+    return rows.map((r, i) => ({
+      kind: 'out' as const,
+      amount: r.amount,
+      date: r.date,
+      description,
+      categoryId: d.categoryId ?? 'dividas',
+      accountId: d.accountId,
+      method: 'Boleto',
+      installment: rows.length > 1 ? { n: i + 1, total: rows.length } : undefined,
+      source: { type: 'debt' as SourceType, id: d.id },
+      key: `p${i + 1}`,
+      paid: i < d.paidCount || d.status === 'quitada',
+    }))
+  }
   const anchor = Number(d.firstDue.slice(8, 10))
   const total = d.recurring ? d.installments : 1
   const out: Draft[] = []
@@ -115,7 +133,7 @@ export function debtDrafts(d: Debt, until: ISODate): Draft[] {
       kind: 'out',
       amount: d.amount,
       date,
-      description: `${d.name}${d.creditor ? ` (${d.creditor})` : ''}`,
+      description,
       categoryId: d.categoryId ?? 'dividas',
       accountId: d.accountId,
       method: 'Boleto',

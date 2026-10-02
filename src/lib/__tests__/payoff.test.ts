@@ -67,3 +67,26 @@ describe('plano de pagamento das dívidas', () => {
     expect(com.debtFreeMonth).toBe('2027-01')
   })
 })
+
+describe('acordo com datas escolhidas', () => {
+  it('gera uma parcela por data, com o valor de cada uma', () => {
+    const d: Debt = {
+      id: 'x', name: 'Acordo 32 mil', creditor: 'Banco', amount: 8000, firstDue: '2026-10-20', recurring: true, installments: 4, paidCount: 1,
+      status: 'ativa', kind: 'acordo',
+      customSchedule: [
+        { date: '2027-03-10', amount: 8000 },
+        { date: '2026-10-20', amount: 8000 },
+        { date: '2026-12-15', amount: 8000 },
+        { date: '2027-07-30', amount: 8000 },
+      ],
+    }
+    const drafts = debtDrafts(d, '2027-12-31')
+    expect(drafts.map((x) => x.date)).toEqual(['2026-10-20', '2026-12-15', '2027-03-10', '2027-07-30'])
+    expect(drafts.map((x) => x.amount)).toEqual([8000, 8000, 8000, 8000])
+    expect(drafts.map((x) => x.paid)).toEqual([true, false, false, false])
+    expect(drafts[3].installment).toEqual({ n: 4, total: 4 })
+    const txs: Transaction[] = drafts.map((x, k) => ({ ...x, id: 'y' + k, createdAt: 0, paid: !!x.paid }))
+    const plan = planPayoff([d], txs, 0, 'menores', { ref: REF })
+    expect(plan.scheduled[0]).toMatchObject({ remaining: 3, remainingValue: 24000, endMonth: '2027-07', installment: 0 })
+  })
+})

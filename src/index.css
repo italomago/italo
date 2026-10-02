@@ -1218,3 +1218,16 @@ table.t tr.next td {
   place-items: center;
   flex: none;
 }
+
+.inst-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.3fr) minmax(0, 1fr) 40px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.inst-row .input {
+  padding: 10px 8px;
+  font-size: 15px;
+  min-width: 0;
+}
