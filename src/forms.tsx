@@ -704,6 +704,10 @@ function FinancingForm({ id, initial }: { id?: string; initial?: Record<string, 
   // taxas em % para digitação
   const [rateM, setRateM] = useState<number | undefined>(s.monthlyRate != null ? round2(s.monthlyRate * 10000) / 100 : undefined)
   const [rateA, setRateA] = useState<number | undefined>(s.annualRate != null ? round2(s.annualRate * 10000) / 100 : undefined)
+  const [nominal, setNominal] = useState(false)
+  const r4 = (x: number) => Math.round(x * 10000) / 10000
+  // taxa anual (%) → mensal (%): nominal divide por 12; efetiva usa juros compostos
+  const toMonthly = (annualPct: number, nom: boolean) => r4(nom ? annualPct / 12 : annualToMonthly(annualPct / 100) * 100)
   const merged: Financing = { ...s, monthlyRate: rateM != null ? rateM / 100 : undefined, annualRate: rateA != null ? rateA / 100 : undefined }
   const valid = s.n > 0 && ((s.financedValue ?? 0) > 0 || (s.assetValue ?? 0) > 0 || (s.installment ?? 0) > 0) && !!s.firstDate
   const sum = valid ? summarizeFinancing(merged) : null
@@ -753,7 +757,7 @@ function FinancingForm({ id, initial }: { id?: string; initial?: Record<string, 
           value={rateM}
           onChange={(v) => {
             setRateM(v)
-            setRateA(v != null ? round2(monthlyToAnnual(v / 100) * 10000) / 100 : undefined)
+            setRateA(v != null ? r4(nominal ? v * 12 : monthlyToAnnual(v / 100) * 100) : undefined)
           }}
         />
         <NumberField
@@ -763,14 +767,29 @@ function FinancingForm({ id, initial }: { id?: string; initial?: Record<string, 
           value={rateA}
           onChange={(v) => {
             setRateA(v)
-            setRateM(v != null ? round2(annualToMonthly(v / 100) * 1000000) / 10000 : undefined)
+            setRateM(v != null ? toMonthly(v, nominal) : undefined)
           }}
         />
       </div>
+      <Toggle
+        label="Taxa anual nominal"
+        sub="Marque se o contrato diz “taxa nominal” (comum em financiamento imobiliário, ex.: Caixa). Juros ao mês = taxa anual ÷ 12."
+        value={nominal}
+        onChange={(v) => {
+          setNominal(v)
+          if (rateA != null) setRateM(toMonthly(rateA, v))
+        }}
+      />
       <div className="two">
         <NumberField label="Nº de parcelas" value={s.n} onChange={(v) => set('n', Math.max(1, Math.min(600, v ?? 1)))} />
         <MoneyField label="Valor da parcela" value={s.installment} onChange={(v) => set('installment', v)} hint="Se souber" />
       </div>
+      <MoneyField
+        label="Seguros e taxas por mês (opcional)"
+        value={s.monthlyFees}
+        onChange={(v) => set('monthlyFees', v)}
+        hint="Seguro, taxa de administração etc. que vêm junto da parcela. Não entram nos juros nem nas simulações de quitação."
+      />
       <div className="two">
         <DateField label="1ª parcela" value={s.firstDate} onChange={(v) => set('firstDate', v)} />
         <NumberField label="Parcelas pagas" value={s.paidCount} onChange={(v) => set('paidCount', Math.max(0, Math.min(s.n, v ?? 0)))} />
@@ -790,7 +809,7 @@ function FinancingForm({ id, initial }: { id?: string; initial?: Record<string, 
         label="Saldo devedor informado pelo banco (opcional)"
         value={s.balanceInformed}
         onChange={(v) => set('balanceInformed', v)}
-        hint="Use o valor do extrato/app do banco para simulações mais precisas."
+        hint="Use o valor do extrato ou app do banco. As parcelas futuras e as simulações passam a ser calculadas a partir dele (essencial em contratos corrigidos por IPCA ou TR)."
       />
       <AccountSelect label="Conta de pagamento" value={s.accountId} onChange={(v) => set('accountId', v)} />
       {sum && (

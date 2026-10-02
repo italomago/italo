@@ -131,6 +131,7 @@ export interface Financing {
   firstDate: ISODate
   paidCount: number
   balanceInformed?: number
+  monthlyFees?: number // seguros e taxas por mês
   system: AmortSystem
   accountId?: string
   note?: string

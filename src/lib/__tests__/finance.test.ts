@@ -205,3 +205,43 @@ describe('metas', () => {
     expect(monthsToGoal(12000, 1000, 0.01)).toBe(12)
   })
 })
+
+describe('contrato corrigido por índice (ex.: Caixa SAC + IPCA)', () => {
+  // Contrato real de 360 meses, 69 parcelas pagas, saldo devedor atualizado pelo IPCA
+  const f = {
+    financedValue: 195556.1,
+    monthlyRate: 0.0484 / 12, // taxa nominal anual ÷ 12, como a Caixa calcula
+    n: 360,
+    firstDate: '2021-01-15',
+    paidCount: 69,
+    system: 'SAC' as const,
+    balanceInformed: 260009.7,
+    monthlyFees: 115.76, // seguro 90,76 + taxa de administração 25,00
+  }
+  it('recalcula as parcelas futuras pelo saldo informado e inclui seguro e taxa', () => {
+    const s = summarizeFinancing(f)
+    expect(s.remainingCount).toBe(291)
+    expect(s.nextInstallment!.k).toBe(70)
+    expect(s.nextInstallment!.date).toBe('2026-10-15')
+    const amort = 260009.7 / 291
+    close(s.nextInstallment!.amortization, amort)
+    close(s.nextInstallment!.interest, 260009.7 * (0.0484 / 12))
+    close(s.nextInstallment!.payment, amort + 260009.7 * (0.0484 / 12) + 115.76)
+    // bate com a prestação da Caixa (R$ 2.051,20) com diferença menor que 0,5%
+    expect(Math.abs(s.nextInstallment!.payment - 2051.2) / 2051.2).toBeLessThan(0.005)
+    const future = s.schedule.slice(69)
+    close(future.reduce((a, r) => a + r.amortization, 0), 260009.7, 0.05)
+    expect(s.schedule[359].balance).toBe(0)
+    expect(s.payoffDate).toBe('2050-12-15')
+    expect(s.balance).toBe(260009.7)
+    // simulação parte do mesmo saldo e tem o mesmo prazo
+    const st = loanStateFrom(s)
+    expect(runPayoff(st).months).toBe(291)
+    close(runPayoff(st).totalInterest, s.interestRemaining, 2) // simulador não arredonda centavos mês a mês
+  })
+  it('seguro e taxa explícitos não viram juros', () => {
+    const r = resolveFinancing({ ...f, balanceInformed: undefined })
+    expect(r.fees).toBe(115.76)
+    expect(r.warnings.some((w) => w.includes('seguros/tarifas'))).toBe(false)
+  })
+})
