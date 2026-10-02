@@ -31,6 +31,9 @@ export function Financings() {
         title="Financiamentos"
         right={
           <>
+            <button className="icon-btn" onClick={() => navigate('amortizar')} aria-label="Onde amortizar">
+              ⚖️
+            </button>
             <button className="icon-btn" onClick={() => openForm({ type: 'importar' })} aria-label="Importar cadastro">
               📥
             </button>
@@ -63,6 +66,11 @@ export function Financings() {
         </div>
       )}
       <div className="spacer" />
+      {list.filter((x) => x.s.remainingCount > 0).length > 1 && (
+        <button className="btn secondary" style={{ marginBottom: 10 }} onClick={() => navigate('amortizar')}>
+          ⚖️ Onde amortizar? Comparar financiamentos
+        </button>
+      )}
       {list.length ? (
         list.map(({ f, s }) => (
           <div key={f.id} className="card" role="button" onClick={() => navigate('financiamentos/' + f.id)} style={{ cursor: 'pointer' }}>
@@ -114,10 +122,10 @@ export function Financings() {
 
 type Tab = 'resumo' | 'cronograma' | 'evolucao' | 'simulador'
 
-export function FinancingDetail({ id }: { id: string }) {
+export function FinancingDetail({ id, initialTab }: { id: string; initialTab?: Tab }) {
   const data = useData()
   const f = data.financings.find((x) => x.id === id)
-  const [tab, setTab] = useState<Tab>('resumo')
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'resumo')
   const s = useMemo(() => (f ? summarizeFinancing(f) : null), [f])
   if (!f || !s) return <div className="screen"><TopBar title="Não encontrado" showBack /></div>
   const txs = data.transactions.filter((t) => t.source.type === 'financing' && t.source.id === f.id)
