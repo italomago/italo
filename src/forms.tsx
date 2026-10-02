@@ -31,6 +31,7 @@ import type {
   Account,
   Card,
   Debt,
+  DebtKind,
   Financing,
   Frequency,
   Goal,
@@ -848,11 +849,23 @@ function FinancingForm({ id, initial }: { id?: string; initial?: Record<string, 
 // Dívida
 // ---------------------------------------------------------------------------
 
+export const DEBT_KINDS: { value: DebtKind; label: string; icon: string }[] = [
+  { value: 'protesto', label: 'Protesto', icon: '⚖️' },
+  { value: 'negativado', label: 'Nome negativado', icon: '🚫' },
+  { value: 'atrasada', label: 'Conta atrasada', icon: '⏰' },
+  { value: 'acordo', label: 'Acordo / parcelamento', icon: '🤝' },
+  { value: 'emprestimo', label: 'Empréstimo', icon: '💵' },
+  { value: 'cartao', label: 'Cartão', icon: '💳' },
+  { value: 'outra', label: 'Outra', icon: '📄' },
+]
+const UNSCHEDULED_KINDS: DebtKind[] = ['protesto', 'negativado', 'atrasada']
+
 function DebtForm({ id, initial }: { id?: string; initial?: Record<string, unknown> }) {
   const data = useData()
   const existing = id ? data.debts.find((x) => x.id === id) : undefined
   const p = initial?.parsed as ReturnType<typeof parseQuick> | undefined
-  const [s, set] = useForm<Debt>(
+  const initialKind = (initial?.kind as DebtKind | undefined) ?? 'outra'
+  const [s, set, setS] = useForm<Debt>(
     existing ?? {
       id: uid(),
       name: p?.description ?? '',
@@ -865,73 +878,128 @@ function DebtForm({ id, initial }: { id?: string; initial?: Record<string, unkno
       status: 'ativa',
       categoryId: 'dividas',
       accountId: data.accounts[0]?.id,
+      kind: initialKind,
+      scheduled: !UNSCHEDULED_KINDS.includes(initialKind),
+      balance: p?.amount,
     },
   )
   const [ratePct, setRatePct] = useState<number | undefined>(s.interest != null ? round2(s.interest * 10000) / 100 : undefined)
-  const valid = s.amount > 0 && !!s.name.trim()
+  const scheduled = s.scheduled !== false
+  const balance = s.balance ?? 0
+  const valid = !!s.name.trim() && (scheduled ? s.amount > 0 : balance > 0)
   const total = s.recurring && s.installments > 0 ? s.amount * s.installments : s.amount
+  const discount = s.offer && balance > 0 && s.offer < balance ? balance - s.offer : 0
   const save = () => {
-    actions.saveDebt({ ...s, interest: ratePct != null ? ratePct / 100 : undefined, installments: s.recurring ? s.installments : 1 })
+    const interest = ratePct != null ? ratePct / 100 : undefined
+    if (scheduled) actions.saveDebt({ ...s, interest, scheduled: true, installments: s.recurring ? s.installments : 1 })
+    else actions.saveDebt({ ...s, interest, scheduled: false, amount: balance, recurring: false, installments: 1 })
     toast(existing ? 'Dívida atualizada' : 'Dívida cadastrada')
     closeForm()
   }
   return (
     <Sheet
-      title={existing ? 'Editar dívida' : 'Nova dívida / compromisso'}
+      title={existing ? 'Editar dívida' : 'Nova dívida'}
       onClose={closeForm}
       footer={<Footer onSave={save} disabled={!valid} onDelete={existing ? () => actions.deleteDebt(s.id) : undefined} />}
     >
-      <MoneyField label={s.recurring ? 'Valor de cada parcela' : 'Valor'} value={s.amount || undefined} onChange={(v) => set('amount', v ?? 0)} big autoFocus={!s.amount} />
-      <div className="two">
-        <Field label="Nome da dívida">
-          <input value={s.name} onChange={(e) => set('name', e.target.value)} placeholder="Ex.: Empréstimo" />
-        </Field>
-        <Field label="Credor">
-          <input value={s.creditor} onChange={(e) => set('creditor', e.target.value)} placeholder="Ex.: Banco X" />
-        </Field>
-      </div>
-      <Field label="Tipo">
-        <Seg
-          options={[
-            { value: 'u', label: 'Única' },
-            { value: 'p', label: 'Parcelada / mensal' },
-          ]}
-          value={s.recurring ? 'p' : 'u'}
-          onChange={(v) => set('recurring', v === 'p')}
+      <Field label="Tipo de dívida">
+        <Picker
+          options={DEBT_KINDS.map((k) => ({ value: k.value, label: `${k.icon} ${k.label}` }))}
+          value={s.kind ?? (s.recurring ? 'acordo' : 'outra')}
+          onChange={(v) =>
+            setS((prev) => ({ ...prev, kind: v, scheduled: existing ? prev.scheduled : !UNSCHEDULED_KINDS.includes(v) }))
+          }
         />
       </Field>
       <div className="two">
-        <DateField label={s.recurring ? '1º vencimento' : 'Vencimento'} value={s.firstDue} onChange={(v) => set('firstDue', v)} />
-        {s.recurring && (
-          <NumberField label="Nº de parcelas" value={s.installments} onChange={(v) => set('installments', Math.max(0, Math.min(600, v ?? 0)))} hint="0 = sem prazo" />
-        )}
+        <Field label="Nome da dívida">
+          <input value={s.name} onChange={(e) => set('name', e.target.value)} placeholder="Ex.: Protesto loja X" autoFocus={!existing} />
+        </Field>
+        <Field label="Credor">
+          <input value={s.creditor} onChange={(e) => set('creditor', e.target.value)} placeholder="Ex.: Banco, loja, cartório" />
+        </Field>
       </div>
-      {s.recurring && (
-        <div className="two">
-          <NumberField label="Parcelas pagas" value={s.paidCount} onChange={(v) => set('paidCount', Math.max(0, v ?? 0))} />
-          <NumberField label="Juros ao mês" suffix="%" decimals value={ratePct} onChange={setRatePct} />
-        </div>
+      <Field label="Pagamento">
+        <Seg
+          options={[
+            { value: 'aberto', label: 'Ainda sem acordo' },
+            { value: 'programado', label: 'Já pagando / com data' },
+          ]}
+          value={scheduled ? 'programado' : 'aberto'}
+          onChange={(v) =>
+            setS((prev) => ({
+              ...prev,
+              scheduled: v === 'programado',
+              amount: v === 'programado' && !prev.amount ? (prev.offer ?? prev.balance ?? 0) : prev.amount,
+            }))
+          }
+        />
+      </Field>
+
+      {!scheduled ? (
+        <>
+          <MoneyField label="Valor devido hoje" value={s.balance || undefined} onChange={(v) => set('balance', v)} big />
+          <MoneyField
+            label="Proposta para quitar à vista (opcional)"
+            value={s.offer}
+            onChange={(v) => set('offer', v)}
+            hint="Valor com desconto oferecido pelo credor, Serasa Limpa Nome, feirão etc."
+          />
+          {discount > 0 && (
+            <div className="note pos">
+              Desconto de <b>{fmtBRL(discount)}</b> ({Math.round((discount / balance) * 100)}%) se pagar {fmtBRL(s.offer!)} à vista.
+            </div>
+          )}
+          <NumberField label="Juros ao mês, se souber" suffix="%" decimals value={ratePct} onChange={setRatePct} />
+          <div className="note">Dívidas sem acordo não entram nas saídas do mês. Elas aparecem no <b>Plano de pagamento</b>, que mostra em que ordem pagar e quando você fica livre delas.</div>
+        </>
+      ) : (
+        <>
+          <MoneyField label={s.recurring ? 'Valor de cada parcela' : 'Valor'} value={s.amount || undefined} onChange={(v) => set('amount', v ?? 0)} big />
+          <Field label="Forma">
+            <Seg
+              options={[
+                { value: 'u', label: 'Pagamento único' },
+                { value: 'p', label: 'Parcelado / mensal' },
+              ]}
+              value={s.recurring ? 'p' : 'u'}
+              onChange={(v) => set('recurring', v === 'p')}
+            />
+          </Field>
+          <div className="two">
+            <DateField label={s.recurring ? '1º vencimento' : 'Vencimento'} value={s.firstDue} onChange={(v) => set('firstDue', v)} />
+            {s.recurring && (
+              <NumberField label="Nº de parcelas" value={s.installments} onChange={(v) => set('installments', Math.max(0, Math.min(600, v ?? 0)))} hint="0 = sem prazo" />
+            )}
+          </div>
+          {s.recurring && (
+            <div className="two">
+              <NumberField label="Parcelas pagas" value={s.paidCount} onChange={(v) => set('paidCount', Math.max(0, v ?? 0))} />
+              <NumberField label="Juros ao mês" suffix="%" decimals value={ratePct} onChange={setRatePct} />
+            </div>
+          )}
+          {s.recurring && s.installments > 0 && (
+            <div className="note">
+              Restam <b>{Math.max(0, s.installments - s.paidCount)}</b> parcelas · total {fmtBRL(total)} · falta{' '}
+              <b>{fmtBRL(Math.max(0, s.installments - s.paidCount) * s.amount)}</b>
+            </div>
+          )}
+          <AccountSelect value={s.accountId} onChange={(v) => set('accountId', v)} />
+        </>
       )}
-      {s.recurring && s.installments > 0 && (
-        <div className="note">
-          Restam <b>{Math.max(0, s.installments - s.paidCount)}</b> parcelas · total {fmtBRL(total)} · falta{' '}
-          <b>{fmtBRL(Math.max(0, s.installments - s.paidCount) * s.amount)}</b>
-        </div>
-      )}
-      <Field label="Status">
+      <Field label="Situação">
         <Picker
           options={[
-            { value: 'ativa', label: 'Ativa' },
+            { value: 'ativa', label: 'Em aberto' },
             { value: 'negociando', label: 'Negociando' },
-            { value: 'quitada', label: 'Quitada' },
+            { value: 'quitada', label: '✓ Quitada' },
           ]}
           value={s.status}
           onChange={(v) => set('status', v as Debt['status'])}
         />
       </Field>
-      <AccountSelect value={s.accountId} onChange={(v) => set('accountId', v)} />
       <Field label="Observação">
-        <textarea rows={2} value={s.note ?? ''} onChange={(e) => set('note', e.target.value)} />
+        <textarea rows={2} value={s.note ?? ''} onChange={(e) => set('note', e.target.value)} placeholder="Ex.: cartório, nº do protesto, contato do credor" />
       </Field>
     </Sheet>
   )

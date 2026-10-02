@@ -10,6 +10,7 @@ import { GoalDetail, Goals, Reserve } from './screens/Goals'
 import { Accounts, Commitments, More, Purchases, Recurring } from './screens/Manage'
 import { CardDetail, Cards } from './screens/Cards'
 import { Compare } from './screens/Compare'
+import { Debts } from './screens/Debts'
 import { Alerts, Insights, Planning, Reports, Search } from './screens/Analysis'
 import { LockScreen, Settings } from './screens/Settings'
 import { computeAlerts } from './lib/projections'
@@ -20,13 +21,15 @@ const TABS = [
   { path: 'entradas', icon: '⬇️', label: 'Entradas' },
   { path: 'saidas', icon: '⬆️', label: 'Saídas' },
   { path: 'cartoes', icon: '💳', label: 'Cartões' },
-  { path: 'financiamentos', icon: '🏦', label: 'Financ.' },
+  { path: 'dividas', icon: '🧾', label: 'Dívidas' },
   { path: 'metas', icon: '🎯', label: 'Metas' },
   { path: 'mais', icon: '☰', label: 'Mais' },
 ]
 const TAB_OF: Record<string, string> = {
   reserva: 'metas',
-  amortizar: 'financiamentos',
+  amortizar: 'dividas',
+  financiamentos: 'dividas',
+  compromissos: 'dividas',
   compras: 'saidas',
   recorrentes: 'saidas',
 }
@@ -60,6 +63,8 @@ function Screen({ route }: { route: string[] }) {
       return <Recurring />
     case 'planejamento':
       return <Planning />
+    case 'dividas':
+      return <Debts key={id ?? ''} initialView={id === 'plano' ? 'plano' : id === 'financiamentos' ? 'financiamentos' : undefined} />
     case 'amortizar':
       return <Compare />
     case 'situacao':

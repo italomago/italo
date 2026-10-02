@@ -14,7 +14,7 @@ const MENU: { path: string; icon: string; label: string }[] = [
   { path: 'situacao', icon: '🧠', label: 'Minha situação' },
   { path: 'planejamento', icon: '🗓️', label: 'Próximos meses' },
   { path: 'amortizar', icon: '⚖️', label: 'Onde amortizar' },
-  { path: 'compromissos', icon: '📄', label: 'Dívidas e compromissos' },
+  { path: 'compromissos', icon: '📄', label: 'Contas a vencer' },
   { path: 'compras', icon: '🛍️', label: 'Compras' },
   { path: 'recorrentes', icon: '🔄', label: 'Contas recorrentes' },
   { path: 'contas', icon: '🏦', label: 'Contas' },
@@ -232,7 +232,7 @@ export function Commitments() {
   return (
     <div className="screen">
       <TopBar
-        title="Dívidas e compromissos"
+        title="Contas a vencer"
         showBack
         right={
           <button className="icon-btn" onClick={() => openForm({ type: 'divida' })} aria-label="Nova dívida">
