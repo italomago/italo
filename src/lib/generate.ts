@@ -103,6 +103,7 @@ export function purchaseDrafts(p: Purchase, cards: Card[]): Draft[] {
 }
 
 export function debtDrafts(d: Debt, until: ISODate): Draft[] {
+  if (d.scheduled === false) return [] // sem acordo ainda: fica só no plano de pagamento
   const anchor = Number(d.firstDue.slice(8, 10))
   const total = d.recurring ? d.installments : 1
   const out: Draft[] = []

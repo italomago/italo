@@ -1206,3 +1206,15 @@ table.t tr.next td {
   font-weight: 800;
   letter-spacing: -0.02em;
 }
+
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  flex: none;
+}

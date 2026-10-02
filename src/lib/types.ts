@@ -113,7 +113,14 @@ export interface Debt {
   categoryId?: string
   accountId?: string
   note?: string
+  kind?: DebtKind
+  balance?: number // valor total devido hoje (para dívidas sem acordo: protesto, negativação, atraso)
+  offer?: number // proposta para quitar à vista (com desconto)
+  /** false = ainda sem acordo/pagamento programado: não gera lançamentos, entra no plano de pagamento. */
+  scheduled?: boolean
 }
+
+export type DebtKind = 'protesto' | 'negativado' | 'atrasada' | 'acordo' | 'emprestimo' | 'cartao' | 'outra'
 
 export interface Financing {
   id: string
