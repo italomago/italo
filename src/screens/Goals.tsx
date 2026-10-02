@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { actions, useData } from '../store'
-import { Empty, KV, Money, MoneyField, Progress, Section, Seg, TopBar, openForm, toast } from '../components/ui'
+import { askConfirm, Empty, KV, Money, MoneyField, Progress, Section, Seg, TopBar, openForm, toast } from '../components/ui'
 import { LineChart } from '../components/charts'
 import { navigate } from '../router'
 import { addMonthKey, endOfMonth, fmtDate, monthKey, monthLabel, today } from '../lib/dates'
@@ -218,7 +218,7 @@ export function GoalDetail({ id }: { id: string }) {
                 <div className="end">
                   <Money value={e.amount} signed colored />
                   <div>
-                    <button className="badge" style={{ border: 'none' }} onClick={() => confirm('Remover este registro?') && actions.removeGoalEntry(g.id, e.id)}>
+                    <button className="badge" style={{ border: 'none' }} onClick={async () => await askConfirm('Remover este registro?') && actions.removeGoalEntry(g.id, e.id)}>
                       remover
                     </button>
                   </div>
@@ -336,7 +336,7 @@ export function Reserve() {
                 <div className="end">
                   <Money value={e.amount} signed colored />
                   <div>
-                    <button className="badge" style={{ border: 'none' }} onClick={() => confirm('Remover este registro?') && actions.removeReserveEntry(e.id)}>
+                    <button className="badge" style={{ border: 'none' }} onClick={async () => await askConfirm('Remover este registro?') && actions.removeReserveEntry(e.id)}>
                       remover
                     </button>
                   </div>

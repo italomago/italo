@@ -346,3 +346,76 @@ export function Stat({ label, value, hint, tone, onClick }: { label: ReactNode; 
     </div>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Diálogos próprios (substituem prompt/confirm nativos)
+// ---------------------------------------------------------------------------
+
+interface DialogReq {
+  kind: 'confirm' | 'prompt'
+  message: string
+  value?: string
+  secret?: boolean
+  numeric?: boolean
+  danger?: boolean
+  okLabel?: string
+  resolve: (v: string | boolean | null) => void
+}
+const dialogSignal = createSignal<DialogReq | null>(null)
+
+export function askConfirm(message: string, opts: { danger?: boolean; okLabel?: string } = {}): Promise<boolean> {
+  return new Promise((resolve) => dialogSignal.set({ kind: 'confirm', message, ...opts, resolve: (v) => resolve(v === true) }))
+}
+export function askText(message: string, value = '', opts: { secret?: boolean; numeric?: boolean } = {}): Promise<string | null> {
+  return new Promise((resolve) =>
+    dialogSignal.set({ kind: 'prompt', message, value, ...opts, resolve: (v) => resolve(typeof v === 'string' ? v : null) }),
+  )
+}
+
+export function DialogHost() {
+  const d = dialogSignal.use()
+  const [text, setText] = useState('')
+  useEffect(() => setText(d?.value ?? ''), [d])
+  if (!d) return null
+  const close = (v: string | boolean | null) => {
+    dialogSignal.set(null)
+    d.resolve(v)
+  }
+  return (
+    <>
+      <div className="sheet-backdrop" style={{ zIndex: 90 }} onClick={() => close(null)} />
+      <form
+        className="dialog"
+        role="dialog"
+        aria-label={d.message}
+        onSubmit={(e) => {
+          e.preventDefault()
+          close(d.kind === 'confirm' ? true : text)
+        }}
+      >
+        <div className="bold" style={{ fontSize: 16 }}>
+          {d.message}
+        </div>
+        {d.kind === 'prompt' && (
+          <input
+            id="dialog-input"
+            className="input"
+            autoFocus
+            value={text}
+            type={d.secret ? 'password' : 'text'}
+            inputMode={d.numeric ? 'numeric' : undefined}
+            onChange={(e) => setText(e.target.value)}
+          />
+        )}
+        <div className="btn-row">
+          <button type="button" className="btn secondary" onClick={() => close(d.kind === 'confirm' ? false : null)}>
+            Cancelar
+          </button>
+          <button type="submit" className={`btn ${d.danger ? 'danger' : ''}`}>
+            {d.okLabel ?? (d.kind === 'confirm' ? 'Confirmar' : 'OK')}
+          </button>
+        </div>
+      </form>
+    </>
+  )
+}

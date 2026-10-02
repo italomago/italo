@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getData, useData } from './store'
 import { navigate, useRoute } from './router'
 import { FormHost } from './forms'
-import { ToastHost, openForm } from './components/ui'
+import { DialogHost, ToastHost, openForm } from './components/ui'
 import { Dashboard } from './screens/Dashboard'
 import { TxList } from './screens/TxList'
 import { FinancingDetail, Financings } from './screens/Financings'
@@ -129,6 +129,7 @@ export default function App() {
 
   if (locked) return <LockScreen onUnlock={() => setLocked(false)} />
 
+
   const tab = TAB_OF[route[0]] ?? route[0]
   return (
     <>
@@ -150,6 +151,7 @@ export default function App() {
       </nav>
       <FormHost />
       <ToastHost />
+      <DialogHost />
     </>
   )
 }

@@ -1143,3 +1143,19 @@ table.t tr.next td {
     break-inside: avoid;
   }
 }
+.dialog {
+  position: fixed;
+  z-index: 91;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, -30%);
+  width: min(400px, calc(100vw - 32px));
+  background: var(--bg);
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  animation: fade 0.15s;
+}

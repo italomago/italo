@@ -1,7 +1,7 @@
 // Ajustes: segurança (PIN/biometria), backup e restauração, alertas, categorias e tema.
 import { useEffect, useRef, useState } from 'react'
 import { actions, getData, useData } from '../store'
-import { Field, NumberField, Section, Seg, TopBar, Toggle, toast } from '../components/ui'
+import { askConfirm, askText, Field, NumberField, Section, Seg, TopBar, Toggle, toast } from '../components/ui'
 import { biometricAvailable, checkPin, hashPin, makeBackup, readBackup, registerBiometric, verifyBiometric, type BackupFile } from '../lib/security'
 import { shareFile, transactionsCSV, downloadFile } from '../lib/export'
 import { uid } from '../lib/defaults'
@@ -18,17 +18,17 @@ export function Settings() {
   }, [])
 
   const setPin = async () => {
-    const p1 = window.prompt('Crie um PIN de 4 a 8 números')
+    const p1 = await askText('Crie um PIN de 4 a 8 números', '', { secret: true, numeric: true })
     if (!p1) return
     if (!/^\d{4,8}$/.test(p1)) return toast('O PIN deve ter de 4 a 8 números')
-    const p2 = window.prompt('Repita o PIN')
+    const p2 = await askText('Repita o PIN', '', { secret: true, numeric: true })
     if (p1 !== p2) return toast('Os PINs não conferem')
     const { hash, salt } = await hashPin(p1)
     actions.updateSettings({ pinHash: hash, pinSalt: salt, pinLength: p1.length, lockOnStart: true })
     toast('PIN definido 🔒')
   }
   const removePin = async () => {
-    const p = window.prompt('Digite o PIN atual para remover')
+    const p = await askText('Digite o PIN atual para remover', '', { secret: true, numeric: true })
     if (!p || !s.pinHash || !s.pinSalt) return
     if (!(await checkPin(p, s.pinHash, s.pinSalt))) return toast('PIN incorreto')
     actions.updateSettings({ pinHash: undefined, pinSalt: undefined, biometricId: undefined, lockOnStart: false })
@@ -67,13 +67,31 @@ export function Settings() {
     }
   }
 
-  const restore = async (f: File) => {
+  const copyBackup = async () => {
+    const file = await makeBackup(getData(), backupPass || undefined)
     try {
-      const file = JSON.parse(await f.text()) as BackupFile
+      await navigator.clipboard.writeText(JSON.stringify(file))
+      actions.updateSettings({ lastBackup: Date.now() })
+      toast('Backup copiado. Cole num e-mail para você mesmo ou numa nota segura.')
+    } catch {
+      toast('Não foi possível copiar neste navegador')
+    }
+  }
+
+  const restoreText = async () => {
+    const t = await askText('Cole aqui o texto do backup')
+    if (t) await restoreJSON(t)
+  }
+
+  const restore = async (f: File) => restoreJSON(await f.text())
+
+  const restoreJSON = async (json: string) => {
+    try {
+      const file = JSON.parse(json) as BackupFile
       let pass: string | undefined
-      if (file.encrypted) pass = window.prompt('Senha do backup') ?? undefined
+      if (file.encrypted) pass = await askText('Senha do backup', '', { secret: true }) ?? undefined
       const raw = await readBackup(file, pass)
-      if (!confirm('Substituir TODOS os dados deste aparelho pelos do backup?')) return
+      if (!await askConfirm('Substituir TODOS os dados deste aparelho pelos do backup?', { danger: true, okLabel: 'Substituir' })) return
       actions.importData(raw)
       toast('Dados restaurados ✔')
     } catch (e) {
@@ -141,8 +159,14 @@ export function Settings() {
         <button className="btn secondary" onClick={() => doBackup(false)}>
           💾 Baixar arquivo de backup
         </button>
+        <button className="btn secondary" onClick={copyBackup}>
+          📋 Copiar backup como texto
+        </button>
         <button className="btn secondary" onClick={() => fileRef.current?.click()}>
-          ♻️ Restaurar de um backup
+          ♻️ Restaurar de um arquivo
+        </button>
+        <button className="btn secondary" onClick={restoreText}>
+          📋 Restaurar colando o texto
         </button>
         <input
           ref={fileRef}
@@ -192,8 +216,8 @@ export function Settings() {
       <Section title="Zona de perigo" />
       <button
         className="btn danger"
-        onClick={() => {
-          if (confirm('Apagar TODOS os dados deste aparelho? Faça um backup antes.') && confirm('Tem certeza? Esta ação não pode ser desfeita.')) {
+        onClick={async () => {
+          if (await askConfirm('Apagar TODOS os dados deste aparelho? Faça um backup antes.', { danger: true, okLabel: 'Apagar' }) && await askConfirm('Tem certeza? Esta ação não pode ser desfeita.', { danger: true, okLabel: 'Apagar tudo' })) {
             actions.resetAll()
             toast('Dados apagados')
           }
@@ -231,8 +255,8 @@ function CategoriesEditor() {
             <button
               className="ic"
               style={{ border: 'none' }}
-              onClick={() => {
-                const icon = window.prompt('Emoji da categoria', c.icon)
+              onClick={async () => {
+                const icon = await askText('Emoji da categoria', c.icon)
                 if (icon) actions.saveCategory({ ...c, icon: icon.trim().slice(0, 4) })
               }}
             >
@@ -246,15 +270,15 @@ function CategoriesEditor() {
               <button
                 className="badge"
                 style={{ border: 'none' }}
-                onClick={() => {
-                  const name = window.prompt('Nome da categoria', c.name)
+                onClick={async () => {
+                  const name = await askText('Nome da categoria', c.name)
                   if (name?.trim()) actions.saveCategory({ ...c, name: name.trim() })
                 }}
               >
                 editar
               </button>
               {!used.has(c.id) && (
-                <button className="badge neg" style={{ border: 'none' }} onClick={() => confirm(`Excluir “${c.name}”?`) && actions.deleteCategory(c.id)}>
+                <button className="badge neg" style={{ border: 'none' }} onClick={async () => await askConfirm(`Excluir “${c.name}”?`) && actions.deleteCategory(c.id)}>
                   ✕
                 </button>
               )}
@@ -265,8 +289,8 @@ function CategoriesEditor() {
       <div className="spacer" />
       <button
         className="btn secondary"
-        onClick={() => {
-          const name = window.prompt('Nome da nova categoria')
+        onClick={async () => {
+          const name = await askText('Nome da nova categoria')
           if (name?.trim()) actions.saveCategory({ id: uid(), name: name.trim(), kind, icon: kind === 'in' ? '💰' : '🏷️', color: '#64748b', subs: [] })
         }}
       >
@@ -288,13 +312,13 @@ function ListEditor({ list, title }: { list: 'origins' | 'methods' | 'platforms'
       <h3>{title}</h3>
       <div className="picker" style={{ marginBottom: 0 }}>
         {data[list].map((v) => (
-          <button key={v} onClick={() => !locked.includes(v) && confirm(`Remover “${v}”?`) && actions.removeFromList(list, v)}>
+          <button key={v} onClick={async () => !locked.includes(v) && await askConfirm(`Remover “${v}”?`) && actions.removeFromList(list, v)}>
             {v} {!locked.includes(v) && <span className="muted">✕</span>}
           </button>
         ))}
         <button
-          onClick={() => {
-            const v = window.prompt(`Adicionar em ${title.toLowerCase()}`)
+          onClick={async () => {
+            const v = await askText(`Adicionar em ${title.toLowerCase()}`)
             if (v) actions.addToList(list, v)
           }}
         >

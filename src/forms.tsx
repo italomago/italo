@@ -2,6 +2,8 @@
 import { useMemo, useState } from 'react'
 import { actions, useData } from './store'
 import {
+  askConfirm,
+  askText,
   closeForm,
   Field,
   formSignal,
@@ -52,8 +54,8 @@ const FREQ: { value: Frequency; label: string }[] = [
   { value: 'anual', label: 'Anual' },
 ]
 
-function askNew(label: string): string | null {
-  const v = window.prompt(label)
+async function askNew(label: string): Promise<string | null> {
+  const v = await askText(label)
   return v && v.trim() ? v.trim() : null
 }
 
@@ -66,8 +68,8 @@ function CategoryPicker({ kind, value, onChange }: { kind: 'in' | 'out'; value?:
         options={cats.map((c) => ({ value: c.id, label: `${c.icon} ${c.name}` }))}
         value={value}
         onChange={onChange}
-        onAdd={() => {
-          const name = askNew('Nome da nova categoria')
+        onAdd={async () => {
+          const name = await askNew('Nome da nova categoria')
           if (!name) return
           const id = uid()
           actions.saveCategory({ id, name, kind, icon: kind === 'in' ? '💰' : '🏷️', color: '#64748b', subs: [] })
@@ -88,8 +90,8 @@ function SubPicker({ categoryId, value, onChange }: { categoryId?: string; value
         options={cat.subs.map((s) => ({ value: s, label: s }))}
         value={value}
         onChange={(v) => onChange(v === value ? undefined : v)}
-        onAdd={() => {
-          const s = askNew(`Nova subcategoria de ${cat.name}`)
+        onAdd={async () => {
+          const s = await askNew(`Nova subcategoria de ${cat.name}`)
           if (!s) return
           actions.saveCategory({ ...cat, subs: [...cat.subs, s] })
           onChange(s)
@@ -107,8 +109,8 @@ function ListPicker({ list, label, value, onChange }: { list: 'origins' | 'metho
         options={data[list].map((s) => ({ value: s, label: s }))}
         value={value}
         onChange={onChange}
-        onAdd={() => {
-          const v = askNew(`Adicionar: ${label.toLowerCase()}`)
+        onAdd={async () => {
+          const v = await askNew(`Adicionar: ${label.toLowerCase()}`)
           if (!v) return
           actions.addToList(list, v)
           onChange(v)
@@ -169,8 +171,8 @@ function Footer({ onSave, disabled, onDelete, label = 'Salvar' }: { onSave: () =
         <button
           className="btn danger"
           style={{ flex: '0 0 auto', width: 'auto' }}
-          onClick={() => {
-            if (confirm('Excluir este item? Lançamentos gerados por ele também serão removidos.')) {
+          onClick={async () => {
+            if (await askConfirm('Excluir este item? Lançamentos gerados por ele também serão removidos.', { danger: true, okLabel: 'Excluir' })) {
               onDelete()
               closeForm()
               toast('Excluído')
