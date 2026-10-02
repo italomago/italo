@@ -193,3 +193,31 @@ describe('saldos e projeções', () => {
     expect(computeAlerts(data).some((a) => a.title === 'Saldo projetado negativo')).toBe(true)
   })
 })
+
+describe('painel de cartões', () => {
+  it('gasto do mês conta a compra inteira na data da compra; limite se divide entre faturas', async () => {
+    const { cardSpending, limitBreakdown } = await import('../projections')
+    let data: AppData = { ...emptyData(), cards: [nubank, late] }
+    data.purchases = [
+      { id: 'a', platform: 'Amazon', product: 'TV', total: 3000, date: '2026-10-05', method: 'Crédito', installments: 10, cardId: 'nu', status: 'entregue', categoryId: 'compras' },
+      { id: 'b', platform: 'Shopee', product: 'Fone', total: 200, date: '2026-10-01', method: 'Crédito', installments: 1, cardId: 'nu', status: 'entregue', categoryId: 'lazer' },
+      { id: 'c', platform: 'Loja', product: 'Tênis', total: 400, date: '2026-09-20', method: 'Crédito', installments: 2, cardId: 'it', status: 'entregue' },
+    ]
+    data = regenerateAll(data)
+    const oct = cardSpending(data, '2026-10')
+    expect(oct.total).toBe(3200)
+    expect(cardSpending(data, '2026-10', 'nu').byCategory[0]).toEqual({ id: 'compras', value: 3000 })
+    expect(cardSpending(data, '2026-09', 'it').total).toBe(400)
+    const b = limitBreakdown(data, nubank)
+    // fatura aberta out/26 tem o fone (200); TV começa em nov
+    expect(b.currentOpen).toBe(200)
+    expect(b.future).toBe(3000)
+    expect(b.closed).toBe(0)
+    expect(b.used).toBe(3200)
+    // Itaú: compra 20/09 (antes do fechamento 25) → fatura out (vence 05/10), parcela 2 em nov
+    const bi = limitBreakdown(data, late)
+    expect(bi.openInvoice).toBe('2026-11')
+    expect(bi.closed).toBe(200)
+    expect(bi.currentOpen).toBe(200)
+  })
+})

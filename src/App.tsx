@@ -7,7 +7,8 @@ import { Dashboard } from './screens/Dashboard'
 import { TxList } from './screens/TxList'
 import { FinancingDetail, Financings } from './screens/Financings'
 import { GoalDetail, Goals, Reserve } from './screens/Goals'
-import { Accounts, CardDetail, Cards, Commitments, More, Purchases, Recurring } from './screens/Manage'
+import { Accounts, Commitments, More, Purchases, Recurring } from './screens/Manage'
+import { CardDetail, Cards } from './screens/Cards'
 import { Alerts, Insights, Planning, Reports, Search } from './screens/Analysis'
 import { LockScreen, Settings } from './screens/Settings'
 import { computeAlerts } from './lib/projections'
@@ -17,7 +18,8 @@ const TABS = [
   { path: 'inicio', icon: '🏠', label: 'Início' },
   { path: 'entradas', icon: '⬇️', label: 'Entradas' },
   { path: 'saidas', icon: '⬆️', label: 'Saídas' },
-  { path: 'financiamentos', icon: '🏦', label: 'Financiam.' },
+  { path: 'cartoes', icon: '💳', label: 'Cartões' },
+  { path: 'financiamentos', icon: '🏦', label: 'Financ.' },
   { path: 'metas', icon: '🎯', label: 'Metas' },
   { path: 'mais', icon: '☰', label: 'Mais' },
 ]
