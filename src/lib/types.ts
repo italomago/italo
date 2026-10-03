@@ -224,4 +224,6 @@ export interface AppData {
   reserve: Reserve
   settings: Settings
   generatedUntil?: ISODate
+  /** Lançamentos gerados que o usuário apagou (origem:id:chave) — nunca são recriados. */
+  deletedKeys?: string[]
 }

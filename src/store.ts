@@ -12,7 +12,7 @@ import {
   regenerateAll,
   removeSource,
 } from './lib/generate'
-import { today } from './lib/dates'
+import { addDays, today } from './lib/dates'
 import { sameName, type ImportPayload } from './lib/importer'
 import type {
   Account,
@@ -43,13 +43,24 @@ function migrate(raw: Partial<AppData>): AppData {
   return d
 }
 
+/** Chave estável de um lançamento gerado (compra, dívida, financiamento, recorrência). */
+export const genKey = (t: Pick<Transaction, 'source' | 'key'>) => `${t.source.type}:${t.source.id}:${t.key}`
+
+/** Remove lançamentos que o usuário apagou, mesmo que a origem tente recriá-los. */
+function dropDeleted(d: AppData): AppData {
+  if (!d.deletedKeys?.length) return d
+  const del = new Set(d.deletedKeys)
+  const transactions = d.transactions.filter((t) => t.source.type === 'manual' || !t.key || !del.has(genKey(t)))
+  return transactions.length === d.transactions.length ? d : { ...d, transactions }
+}
+
 function load(): AppData {
   try {
     const s = localStorage.getItem(KEY)
     if (s) {
       const d = migrate(JSON.parse(s))
-      if (!d.generatedUntil || d.generatedUntil < horizon()) return regenerateAll(d)
-      return d
+      if (!d.generatedUntil || d.generatedUntil < horizon()) return dropDeleted(regenerateAll(d))
+      return dropDeleted(d)
     }
   } catch (e) {
     console.error('Falha ao carregar dados', e)
@@ -70,7 +81,7 @@ function persist() {
 }
 
 export function setData(next: AppData) {
-  data = next
+  data = dropDeleted(next)
   persist()
   listeners.forEach((l) => l())
 }
@@ -119,8 +130,41 @@ export const actions = {
       return syncCounts(next, tx)
     })
   },
-  deleteTransaction(id: string) {
-    update((d) => ({ ...d, transactions: d.transactions.filter((t) => t.id !== id) }))
+  /**
+   * Apaga um lançamento. Para lançamentos gerados (despesa fixa, compra, dívida, financiamento):
+   * - 'one': só este (fica registrado para não voltar)
+   * - 'future': este e os próximos (encerra a despesa fixa na data anterior)
+   * - 'all': apaga a origem inteira
+   */
+  deleteTransaction(id: string, scope: 'one' | 'future' | 'all' = 'one') {
+    const t = data.transactions.find((x) => x.id === id)
+    if (!t) return
+    const src = t.source
+    if (scope === 'all' && src.id) {
+      if (src.type === 'recurring') return actions.deleteRecurrence(src.id)
+      if (src.type === 'purchase') return actions.deletePurchase(src.id)
+      if (src.type === 'debt') return actions.deleteDebt(src.id)
+      if (src.type === 'financing') return actions.deleteFinancing(src.id)
+    }
+    if (scope === 'future' && src.type === 'recurring' && src.id) {
+      const r = data.recurrences.find((x) => x.id === src.id)
+      if (r) {
+        const end = addDays(t.date, -1)
+        if (end < r.start) return actions.deleteRecurrence(r.id)
+        update((d) => ({
+          ...d,
+          recurrences: d.recurrences.map((x) => (x.id === r.id ? { ...x, end } : x)),
+          transactions: d.transactions.filter((x) => !(x.source.type === 'recurring' && x.source.id === r.id && x.date >= t.date && !x.paid)),
+        }))
+        return
+      }
+    }
+    update((d) => ({
+      ...d,
+      transactions: d.transactions.filter((x) => x.id !== id),
+      deletedKeys: src.type !== 'manual' && t.key ? [...(d.deletedKeys ?? []), genKey(t)] : d.deletedKeys,
+    }))
+    if (src.type === 'debt' || src.type === 'financing') update((d) => syncCounts(d, t))
   },
   setPaid(id: string, paid: boolean, accountId?: string) {
     update((d) => {

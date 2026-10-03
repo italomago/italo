@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { actions, useData } from './store'
 import {
+  askChoice,
   askConfirm,
   askText,
   closeForm,
@@ -168,15 +169,36 @@ function DateField({ label, value, onChange, hint }: { label: string; value?: IS
   )
 }
 
-function Footer({ onSave, disabled, onDelete, label = 'Salvar' }: { onSave: () => void; disabled?: boolean; onDelete?: () => void; label?: string }) {
+function Footer({
+  onSave,
+  disabled,
+  onDelete,
+  confirmDelete,
+  label = 'Salvar',
+}: {
+  onSave: () => void
+  disabled?: boolean
+  onDelete?: () => void
+  /** Exclusão com perguntas próprias; devolve true se excluiu. */
+  confirmDelete?: () => Promise<boolean>
+  label?: string
+}) {
   return (
     <div className="btn-row">
-      {onDelete && (
+      {(onDelete || confirmDelete) && (
         <button
           className="btn danger"
           style={{ flex: '0 0 auto', width: 'auto' }}
+          aria-label="Excluir"
           onClick={async () => {
-            if (await askConfirm('Excluir este item? Lançamentos gerados por ele também serão removidos.', { danger: true, okLabel: 'Excluir' })) {
+            if (confirmDelete) {
+              if (await confirmDelete()) {
+                closeForm()
+                toast('Excluído')
+              }
+              return
+            }
+            if (onDelete && await askConfirm('Excluir este item? Lançamentos gerados por ele também serão removidos.', { danger: true, okLabel: 'Excluir' })) {
               onDelete()
               closeForm()
               toast('Excluído')
@@ -465,6 +487,25 @@ function TxForm({ kind, initial }: { kind: 'in' | 'out'; initial?: Record<string
   )
 }
 
+/** Pergunta o alcance da exclusão de um lançamento e exclui. */
+async function confirmDeleteTx(tx: Transaction): Promise<boolean> {
+  const t = tx.source.type
+  if (t === 'manual' || !tx.source.id) {
+    if (!(await askConfirm('Excluir este lançamento?', { danger: true, okLabel: 'Excluir' }))) return false
+    actions.deleteTransaction(tx.id, 'one')
+    return true
+  }
+  const label =
+    t === 'recurring' ? 'despesa fixa' : t === 'purchase' ? 'compra' : t === 'debt' ? 'dívida' : t === 'financing' ? 'financiamento' : 'origem'
+  const choices = [{ value: 'one', label: tx.installment ? 'Só esta parcela' : 'Só este mês' }]
+  if (t === 'recurring') choices.push({ value: 'future', label: 'Este mês e os próximos' })
+  choices.push({ value: 'all', label: `Apagar a ${label} inteira`, danger: true } as { value: string; label: string; danger?: boolean })
+  const c = await askChoice(`“${tx.description}” faz parte de uma ${label}. O que você quer apagar?`, choices)
+  if (!c) return false
+  actions.deleteTransaction(tx.id, c as 'one' | 'future' | 'all')
+  return true
+}
+
 /** Edição de um lançamento existente (avulso ou gerado). */
 function EditTxForm({ id }: { id: string }) {
   const data = useData()
@@ -497,7 +538,7 @@ function EditTxForm({ id }: { id: string }) {
     <Sheet
       title={tx.kind === 'in' ? 'Entrada' : tx.kind === 'out' ? 'Saída' : 'Transferência'}
       onClose={closeForm}
-      footer={<Footer onSave={save} disabled={!(s.amount! > 0)} onDelete={() => actions.deleteTransaction(tx.id)} />}
+      footer={<Footer onSave={save} disabled={!(s.amount! > 0)} confirmDelete={() => confirmDeleteTx(tx)} />}
     >
       {generated && tx.source.id && (
         <div className="note">

@@ -366,7 +366,8 @@ export function Stat({ label, value, hint, tone, onClick }: { label: ReactNode; 
 // ---------------------------------------------------------------------------
 
 interface DialogReq {
-  kind: 'confirm' | 'prompt'
+  kind: 'confirm' | 'prompt' | 'choice'
+  choices?: { value: string; label: string; danger?: boolean }[]
   message: string
   value?: string
   secret?: boolean
@@ -379,6 +380,10 @@ const dialogSignal = createSignal<DialogReq | null>(null)
 
 export function askConfirm(message: string, opts: { danger?: boolean; okLabel?: string } = {}): Promise<boolean> {
   return new Promise((resolve) => dialogSignal.set({ kind: 'confirm', message, ...opts, resolve: (v) => resolve(v === true) }))
+}
+/** Pergunta com várias opções; devolve o valor escolhido ou null se cancelar. */
+export function askChoice(message: string, choices: { value: string; label: string; danger?: boolean }[]): Promise<string | null> {
+  return new Promise((resolve) => dialogSignal.set({ kind: 'choice', message, choices, resolve: (v) => resolve(typeof v === 'string' ? v : null) }))
 }
 export function askText(message: string, value = '', opts: { secret?: boolean; numeric?: boolean } = {}): Promise<string | null> {
   return new Promise((resolve) =>
@@ -421,6 +426,18 @@ export function DialogHost() {
             onChange={(e) => setText(e.target.value)}
           />
         )}
+        {d.kind === 'choice' ? (
+          <div className="stack">
+            {d.choices!.map((c) => (
+              <button key={c.value} type="button" className={`btn ${c.danger ? 'danger' : 'secondary'}`} onClick={() => close(c.value)}>
+                {c.label}
+              </button>
+            ))}
+            <button type="button" className="btn ghost" onClick={() => close(null)}>
+              Cancelar
+            </button>
+          </div>
+        ) : (
         <div className="btn-row">
           <button type="button" className="btn secondary" onClick={() => close(d.kind === 'confirm' ? false : null)}>
             Cancelar
@@ -429,6 +446,7 @@ export function DialogHost() {
             {d.okLabel ?? (d.kind === 'confirm' ? 'Confirmar' : 'OK')}
           </button>
         </div>
+        )}
       </form>
     </>
   )
