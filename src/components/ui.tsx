@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { fmtBRL, fmtNum, parseMoney } from '../lib/money'
 import { useData } from '../store'
 import { back } from '../router'
@@ -160,7 +160,9 @@ export function MoneyField({
   autoFocus?: boolean
 }) {
   const [text, setText] = useState(toInputStr(value))
+  const editing = useRef(false)
   useEffect(() => {
+    if (editing.current) return
     const parsed = parseMoney(text)
     if (parsed !== (value ?? null)) setText(toInputStr(value))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,7 +174,9 @@ export function MoneyField({
       placeholder={big ? 'R$ 0,00' : placeholder}
       value={text}
       autoFocus={autoFocus}
+      onFocus={() => (editing.current = true)}
       onBlur={() => {
+        editing.current = false
         const v = parseMoney(text)
         if (v != null) setText(fmtNum(v))
       }}
@@ -217,7 +221,10 @@ export function NumberField({
   placeholder?: string
 }) {
   const [text, setText] = useState(toInputStr(value))
+  // enquanto o campo está em edição, não reescreve o texto (permite apagar e digitar outro número)
+  const editing = useRef(false)
   useEffect(() => {
+    if (editing.current) return
     const p = text === '' ? undefined : Number(text.replace(',', '.'))
     if (p !== value) setText(toInputStr(value))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,6 +236,11 @@ export function NumberField({
         inputMode={decimals ? 'decimal' : 'numeric'}
         value={text}
         placeholder={placeholder}
+        onFocus={() => (editing.current = true)}
+        onBlur={() => {
+          editing.current = false
+          setText(toInputStr(value)) // mostra o valor final (ex.: limitado a 1–31)
+        }}
         onChange={(e) => {
           const t = e.target.value.replace(decimals ? /[^\d.,]/g : /\D/g, '')
           setText(t)
