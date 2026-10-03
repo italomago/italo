@@ -1475,9 +1475,12 @@ function CardForm({ id, initial }: { id?: string; initial?: Record<string, unkno
       </div>
       <MoneyField label="Limite total" value={s.limit || undefined} onChange={(v) => set('limit', v ?? 0)} />
       <div className="two">
-        <NumberField label="Dia de fechamento" value={s.closingDay} onChange={(v) => set('closingDay', v ?? 1)} />
-        <NumberField label="Dia de vencimento" value={s.dueDay} onChange={(v) => set('dueDay', v ?? 10)} />
+        <NumberField label="Dia de fechamento" value={s.closingDay || undefined} onChange={(v) => set('closingDay', v ?? 0)} placeholder="1 a 31" />
+        <NumberField label="Dia de vencimento" value={s.dueDay || undefined} onChange={(v) => set('dueDay', v ?? 0)} placeholder="1 a 31" />
       </div>
+      {(!(s.closingDay >= 1 && s.closingDay <= 31) || !(s.dueDay >= 1 && s.dueDay <= 31)) && (
+        <div className="note warn">Informe os dias de fechamento e de vencimento (de 1 a 31).</div>
+      )}
       <div className="note">Compras feitas a partir do dia de fechamento entram na fatura seguinte.</div>
       <AccountSelect label="Conta que paga a fatura" value={s.accountId} onChange={(v) => set('accountId', v)} />
     </Sheet>
